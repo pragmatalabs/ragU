@@ -28,6 +28,8 @@ Most RAG tutorials end at "here's a Jupyter notebook." Real exploration needs a 
 
 **It's a playground, not a product.** Fork it, break it, rebuild it. That's the point.
 
+** SEE ** #DIAGRAMS.md
+
 ---
 
 ## What You Get
