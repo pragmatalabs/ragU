@@ -1,0 +1,74 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ragu-postgres
+    ports:
+      - "${POSTGRES_PORT:-5438}:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ragu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragu_local}
+      POSTGRES_DB: ${POSTGRES_DB:-ragu}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./services/rag/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ragu}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: ragu-minio
+    ports:
+      - "${MINIO_API_PORT:-9008}:9000"
+      - "${MINIO_CONSOLE_PORT:-9009}:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-ragu}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-ragu_local_s3}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ragu-qdrant
+    ports:
+      - "${QDRANT_REST_PORT:-6339}:6333"
+      - "${QDRANT_GRPC_PORT:-6340}:6334"
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: ragu-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+volumes:
+  postgres-data:
+  minio-data:
+  qdrant-data:
+  redis-data:

@@ -1,0 +1,16 @@
+{
+  "name": "ragu",
+  "private": true,
+  "workspaces": ["apps/*", "packages/*"],
+  "scripts": {
+    "dev": "bun run --filter './apps/web' dev",
+    "dev:gateway": "bun run --filter './apps/gateway' dev",
+    "dev:all": "bun run --filter './apps/*' dev",
+    "dev:rag": "cd services/rag && uvicorn app.main:app --host 0.0.0.0 --port 8006 --reload",
+    "build": "bun run --filter './apps/*' build",
+    "docker:up": "docker compose up -d",
+    "docker:down": "docker compose down",
+    "docker:logs": "docker compose logs -f",
+    "ollama:init": "bash scripts/init-ollama.sh"
+  }
+}
