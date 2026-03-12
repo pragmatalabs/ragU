@@ -3,6 +3,8 @@
 > Visual documentation of the ragU playground architecture, data flows, and system interactions.
 > Render these with any Mermaid-compatible viewer (GitHub, VS Code, Obsidian, mermaid.live).
 
+> **See also:** [README](README.md) &middot; [Architecture (prose)](ARCHITECTURE.md)
+
 ---
 
 ## Table of Contents

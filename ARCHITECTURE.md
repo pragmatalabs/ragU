@@ -2,6 +2,8 @@
 
 > A fully local monorepo playground for experimenting with LLMs, RAG pipelines, and vector databases. Everything runs on your machine --- no cloud dependencies.
 
+> **See also:** [README](README.md) &middot; [Diagrams (Mermaid)](DIAGRAMS.md)
+
 ---
 
 ## System Overview
