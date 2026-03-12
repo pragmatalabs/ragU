@@ -2,7 +2,7 @@
   "name": "ragu",
   "version": "0.1.0",
   "description": "A fully local playground for LLMs, RAG pipelines, and vector databases",
-  "author": "Julian de la Rosa <https://linkedin.com/in/juliandelarosa>",
+  "author": "Julian de la Rosa <https://www.linkedin.com/in/jdlrs/>",
   "license": "MIT",
   "private": true,
   "workspaces": ["apps/*", "packages/*"],

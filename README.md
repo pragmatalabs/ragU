@@ -72,7 +72,7 @@ Most RAG tutorials end at "here's a Jupyter notebook." Real exploration needs a 
 
 ```bash
 # Clone
-git clone https://github.com/juliandelarosa/ragU.git
+git clone https://github.com/pragmatalabs/ragU.git
 cd ragU
 
 # 1. Environment
@@ -266,8 +266,8 @@ This is a playground. Use it to learn, experiment, and build. No strings attache
 
 **Julian de la Rosa**
 
-- GitHub: [@juliandelarosa](https://github.com/juliandelarosa)
-- LinkedIn: [linkedin.com/in/juliandelarosa](https://linkedin.com/in/juliandelarosa)
+- GitHub: [@pragmatalabs](https://github.com/pragmatalabs)
+- LinkedIn: [linkedin.com/in/jdlrs](https://www.linkedin.com/in/jdlrs/)
 
 Built with curiosity and too much coffee.
 
