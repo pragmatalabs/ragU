@@ -16,7 +16,12 @@ async def lifespan(app: FastAPI):
     await store.close()
 
 
-app = FastAPI(title="ragU RAG Service", lifespan=lifespan)
+app = FastAPI(
+    title="ragU RAG Service",
+    description="Local RAG backend for the ragU playground",
+    version="0.1.0",
+    lifespan=lifespan,
+)
 
 app.add_middleware(
     CORSMiddleware,

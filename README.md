@@ -1,73 +1,209 @@
-# ragU
+<p align="center">
+  <img src="https://em-content.zobj.net/source/apple/391/pot-of-food_1f372.png" width="80" />
+</p>
 
-Local LLM / SLM / RAG / MCP Playground. All services run in Docker, no cloud required.
+<h1 align="center">ragU</h1>
 
-## Stack
+<p align="center">
+  <strong>A fully local playground for LLMs, RAG pipelines, and vector databases.</strong><br/>
+  No cloud. No API keys. No data leaves your machine.<br/>
+  Just you, your models, and your documents.
+</p>
 
-| Layer       | Tech                                |
-|-------------|-------------------------------------|
-| LLM Runtime | Ollama (Llama 3.2:3b, quantized)   |
-| RAG Backend | Python + FastAPI                    |
-| API Gateway | TypeScript + Hono (bun)             |
-| Frontend    | React + Vite + Tailwind CSS         |
-| Vector DBs  | pgvector (PostgreSQL) + Qdrant      |
-| Embeddings  | nomic-embed-text via Ollama         |
+<p align="center">
+  <a href="ARCHITECTURE.md"><img src="https://img.shields.io/badge/docs-Architecture-blue?style=flat-square" alt="Architecture" /></a>
+  <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License" />
+  <img src="https://img.shields.io/badge/status-experimental-orange?style=flat-square" alt="Experimental" />
+  <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome" />
+</p>
 
-## Ports
+---
 
-All ports offset by +6 from defaults to avoid collisions:
+## Why ragU?
 
-| Service    | Port  |
-|------------|-------|
-| Frontend   | 5179  |
-| Gateway    | 3006  |
-| RAG API    | 8006  |
-| Ollama     | 11440 |
-| PostgreSQL | 5438  |
-| Qdrant     | 6339  |
+I built ragU because I wanted a **single place** to experiment with local AI without juggling disconnected scripts, paying for API calls, or shipping my data to the cloud.
+
+Most RAG tutorials end at "here's a Jupyter notebook." Real exploration needs a real environment --- a UI to chat with, a pipeline to ingest documents, vector stores to compare, and knobs to tweak. ragU is that environment.
+
+**It's a playground, not a product.** Fork it, break it, rebuild it. That's the point.
+
+---
+
+## What You Get
+
+```
+ You type a question
+      |
+      v
+ +----------+     +----------+     +----------+
+ |  React   | --> |  Hono    | --> |  Ollama  |  <-- your local LLM
+ |  (Vite)  |     | (Gateway)|     | (native) |
+ +----------+     +----+-----+     +----------+
+                       |
+                       v
+                 +-----+------+
+                 |  FastAPI   |  <-- RAG backend
+                 |  (Python)  |
+                 +--+---+--+--+
+                    |   |  |
+          +---------+   |  +---------+
+          v             v            v
+   +------+---+  +------+---+  +----+-----+
+   | pgvector |  |  Qdrant  |  |  MinIO   |
+   | (record) |  |  (ANN)   |  |  (files) |
+   +----------+  +----------+  +----------+
+```
+
+- **Chat** with local LLMs --- streaming responses, markdown rendering, syntax highlighting
+- **Upload documents** directly in the chat (paperclip or drag-and-drop) --- PDF, DOCX, XLSX, CSV, and more
+- **RAG pipeline** --- automatic chunking, embedding, and retrieval with source attribution
+- **Dual vector stores** --- PostgreSQL+pgvector as system of record, Qdrant as ANN engine, or both via hybrid mode
+- **Hybrid search** --- vector similarity + full-text keyword search fused with Reciprocal Rank Fusion
+- **Agent Guidelines** --- persistent system prompts per session (language, format, persona)
+- **Model management** --- pull and switch Ollama models from the UI
+- **Zero cloud dependencies** --- everything runs on your machine
+
+---
 
 ## Quick Start
 
+> **Prerequisites:** [Docker](https://docs.docker.com/get-docker/), [Ollama](https://ollama.ai) (native), [Bun](https://bun.sh), [Python 3.12+](https://www.python.org/), [pnpm](https://pnpm.io)
+
 ```bash
-# 1. Copy environment
+# Clone
+git clone https://github.com/juliandelarosa/ragU.git
+cd ragU
+
+# 1. Environment
 cp .env.example .env
 
-# 2. Install JS dependencies
-bun install
-
-# 3. Start all Docker services (Ollama, Qdrant, PostgreSQL, RAG, Gateway)
+# 2. Start infrastructure (PostgreSQL, MinIO, Qdrant, Redis)
 docker compose up -d
 
-# 4. Pull models (first time only — takes a few minutes)
-bash scripts/init-ollama.sh
+# 3. Pull Ollama models (first time only)
+ollama pull llama3.2:3b
+ollama pull nomic-embed-text
 
-# 5. Start the frontend (with hot reload)
-bun run dev
+# 4. Start RAG backend
+cd services/rag
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn app.main:app --port 8006 --reload &
+cd ../..
+
+# 5. Start gateway + frontend
+bun install
+bun run dev:all
 ```
 
-Open http://localhost:5179 and start chatting.
+Open **http://localhost:5179** --- upload a document, flip on RAG mode, and start asking questions.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Purpose |
+|-------|-----------|---------|
+| Frontend | React 19 + Vite 6 + Tailwind CSS | Chat UI, settings, file upload |
+| Gateway | Hono + Bun | API proxy and routing |
+| RAG Backend | FastAPI + Python 3.12 | Ingest, embed, search, retrieve |
+| LLM Runtime | Ollama (native macOS) | Chat generation + embeddings |
+| Vector DB | PostgreSQL + pgvector | System of record, hybrid search, dedup |
+| Vector DB | Qdrant | High-performance ANN engine |
+| Object Storage | MinIO | S3-compatible document storage |
+| Cache | Redis | Reserved for memory + task queues |
+
+### Vector Store Modes
+
+Switch between engines with a single env var:
+
+```bash
+VECTOR_DB=pgvector   # PostgreSQL only (default) --- hybrid search built-in
+VECTOR_DB=qdrant     # Qdrant only --- pure ANN
+VECTOR_DB=hybrid     # Both --- PG as record + Qdrant as ANN, fused via RRF
+```
+
+In `hybrid` mode, existing pgvector data syncs to Qdrant automatically on startup. If Qdrant goes down, the system gracefully degrades to PG-only.
+
+---
 
 ## Features
 
-- **Chat**: Stream responses from local LLMs via Ollama
-- **Model Management**: Pull and switch between models from the UI
-- **RAG**: Upload documents, chunk + embed, retrieve context for augmented responses
-- **Vector DB Toggle**: Switch between pgvector and Qdrant via `VECTOR_DB` env var
-- **Settings**: Temperature, Top P, Top K sliders
-- **Dark Mode**: Default dark UI
+### Chat with Local Models
+Stream responses from any Ollama model. Full markdown rendering with GitHub-Flavored Markdown, syntax highlighting, and copy-to-clipboard on code blocks.
 
-## Architecture
+### Document Upload in Chat
+Click the paperclip or drag files onto the input. Supported: `.pdf`, `.docx`, `.xlsx`, `.xls`, `.csv`, `.json`, `.txt`, `.md`. Files are stored in MinIO, parsed, chunked, embedded, and indexed --- with real-time status chips showing progress.
+
+### RAG Retrieval
+Toggle RAG mode in the sidebar. Your question gets embedded, matched against your document store (vector + keyword search), and the top-K chunks are injected as context. Sources are displayed under each response.
+
+### Agent Guidelines
+Set persistent system instructions per session: response language, formatting rules, persona, domain constraints. Combined with RAG context when both are active.
+
+### Hybrid Search with RRF
+Cross-lingual retrieval that actually works. English queries find Spanish documents (and vice versa) by fusing embedding similarity with keyword matching:
 
 ```
-Browser (React) → Gateway (Hono) → Ollama (LLM)
-                                  → RAG Backend (FastAPI) → pgvector / Qdrant
-                                                          → Ollama (embeddings)
+score = 1/(k + vec_rank) + kw_weight/(k + kw_rank)
+        k=60, kw_weight=1.5
 ```
+
+### Content Deduplication
+Re-uploading the same document won't bloat your index. SHA-256 content hashing with a unique constraint catches duplicates at the database level.
+
+---
+
+## Ports
+
+All ports offset by `+6` from defaults to avoid collisions with other local services:
+
+| Service | Port |
+|---------|------|
+| Frontend | `5179` |
+| Gateway | `3006` |
+| RAG API | `8006` |
+| Ollama | `11434` |
+| PostgreSQL | `5438` |
+| Qdrant | `6339` |
+| MinIO API | `9008` |
+| MinIO Console | `9009` |
+| Redis | `6379` |
+
+---
+
+## Project Structure
+
+```
+ragU/
+|-- apps/
+|   |-- web/                  # React + Vite + Tailwind + Zustand
+|   |-- gateway/              # Hono + Bun API proxy
+|-- services/
+|   |-- rag/                  # FastAPI RAG backend
+|       |-- app/
+|       |   |-- routers/      # ingest, query, collections, files
+|       |   |-- services/     # parser, chunker, embedder, storage
+|       |   |-- stores/       # pgvector_store, qdrant_store, hybrid_store
+|       |   |-- config.py
+|       |   |-- main.py
+|       |-- requirements.txt
+|-- packages/
+|   |-- shared/               # Shared TypeScript types
+|-- docker-compose.yml        # PostgreSQL, MinIO, Qdrant, Redis
+|-- ARCHITECTURE.md           # Deep-dive system documentation
+|-- .env.example
+|-- package.json              # Bun workspace root
+```
+
+> For a deep dive into how every layer connects, data flows, database schemas, and configuration reference, see the **[Architecture Document](ARCHITECTURE.md)**.
+
+---
 
 ## Development
 
 ```bash
-# Frontend only (proxies API to gateway)
+# Frontend only (proxies to gateway)
 bun run dev
 
 # Gateway only
@@ -76,17 +212,66 @@ bun run dev:gateway
 # Both frontend + gateway
 bun run dev:all
 
+# RAG backend (with hot reload)
+bun run dev:rag
+
 # Docker services
-docker compose up -d      # start
-docker compose down        # stop
-docker compose logs -f     # follow logs
+docker compose up -d          # start
+docker compose down            # stop
+docker compose logs -f rag     # follow RAG logs
 ```
 
-## Environment Variables
+---
 
-See `.env.example` for all configuration options. Key ones:
+## Configuration
 
-- `VECTOR_DB` — `qdrant` (default) or `pgvector`
-- `OLLAMA_MODEL` — default chat model
-- `OLLAMA_EMBED_MODEL` — embedding model for RAG
-- `CHUNK_SIZE` / `CHUNK_OVERLAP` — RAG chunking parameters
+All settings via environment variables. See [`.env.example`](.env.example) for the full list.
+
+| Variable | Default | What it does |
+|----------|---------|-------------|
+| `VECTOR_DB` | `pgvector` | Vector store mode: `pgvector`, `qdrant`, `hybrid` |
+| `OLLAMA_MODEL` | `llama3.2:3b` | Default chat model |
+| `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model (768-dim) |
+| `CHUNK_SIZE` | `500` | Characters per chunk |
+| `CHUNK_OVERLAP` | `50` | Overlap between chunks |
+
+---
+
+## Motivation
+
+The AI ecosystem moves fast, but most of it is locked behind API paywalls and cloud platforms. I believe in **learning by building** --- and building locally means you own every bit of the stack.
+
+ragU exists so anyone can:
+
+- **Experiment freely** with LLMs, embeddings, and retrieval without cost barriers
+- **Understand RAG end-to-end** --- from document parsing to vector search to generation
+- **Compare vector databases** side-by-side with the same data and queries
+- **Build intuition** about chunking strategies, embedding models, and search fusion
+- **Prototype ideas** in a real full-stack environment, not just notebooks
+
+If you're learning about AI infrastructure, exploring local LLMs, or just curious about how RAG works under the hood --- this is your sandbox.
+
+---
+
+## License
+
+**MIT** --- free to use, modify, and distribute. See [LICENSE](LICENSE) for details.
+
+This is a playground. Use it to learn, experiment, and build. No strings attached.
+
+---
+
+## Author
+
+**Julian de la Rosa**
+
+- GitHub: [@juliandelarosa](https://github.com/juliandelarosa)
+- LinkedIn: [linkedin.com/in/juliandelarosa](https://linkedin.com/in/juliandelarosa)
+
+Built with curiosity and too much coffee.
+
+---
+
+<p align="center">
+  <sub>If ragU helped you learn something, a star goes a long way.</sub>
+</p>
