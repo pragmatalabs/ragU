@@ -12,6 +12,7 @@
 
 <p align="center">
   <a href="ARCHITECTURE.md"><img src="https://img.shields.io/badge/docs-Architecture-blue?style=flat-square" alt="Architecture" /></a>
+  <a href="DIAGRAMS.md"><img src="https://img.shields.io/badge/docs-Diagrams_(Mermaid)-purple?style=flat-square" alt="Diagrams" /></a>
   <img src="https://img.shields.io/badge/license-MIT-green?style=flat-square" alt="MIT License" />
   <img src="https://img.shields.io/badge/status-experimental-orange?style=flat-square" alt="Experimental" />
   <img src="https://img.shields.io/badge/PRs-welcome-brightgreen?style=flat-square" alt="PRs Welcome" />

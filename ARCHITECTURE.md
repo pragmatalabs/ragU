@@ -421,4 +421,7 @@ ragU/
 +-- package.json              # Workspace root (Bun)
 +-- .env.example
 +-- ARCHITECTURE.md           # This file
++-- DIAGRAMS.md               # Mermaid diagrams (C4, sequence, flows)
 ```
+
+> See also: **[Mermaid Diagrams](DIAGRAMS.md)** --- C4 context/container/component views, sequence diagrams for chat and upload flows, and flowcharts for hybrid search, ingestion, and graceful degradation.
