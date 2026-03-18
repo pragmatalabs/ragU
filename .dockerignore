@@ -1,0 +1,12 @@
+node_modules
+.git
+.env
+.env.*
+*.md
+.claude
+.vscode
+dist
+__pycache__
+*.pyc
+.venv
+.mypy_cache

@@ -240,6 +240,31 @@ All settings via environment variables. See [`.env.example`](.env.example) for t
 
 ---
 
+## Production Deployment (Digital Ocean + Traefik)
+
+ragU ships with a production Docker Compose that includes Traefik for automatic HTTPS via Let's Encrypt.
+
+```bash
+# On your server (e.g. Digital Ocean droplet with Docker)
+git clone https://github.com/pragmatalabs/ragU.git
+cd ragU
+
+# Configure production environment
+cp .env.production .env
+nano .env   # Set strong passwords!
+
+# Deploy everything
+bash scripts/deploy.sh
+```
+
+This spins up all services (Traefik, Nginx, Gateway, RAG, Ollama, PostgreSQL, Qdrant, MinIO, Redis) and pulls LLM models automatically.
+
+**Live at:** `https://ragu.pragmata.cloud`
+
+**Recommended droplet:** 4 vCPU / 8 GB RAM (CPU-optimized) for the 3B model. GPU droplets enable faster inference.
+
+---
+
 ## Motivation
 
 The AI ecosystem moves fast, but most of it is locked behind API paywalls and cloud platforms. I believe in **learning by building** --- and building locally means you own every bit of the stack.

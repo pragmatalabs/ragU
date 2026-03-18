@@ -1,0 +1,209 @@
+# Production compose for Digital Ocean with Traefik
+# Domain: ragu.pragmata.cloud
+#
+# Usage:
+#   cp .env.production .env
+#   docker compose -f docker-compose.prod.yml up -d
+#
+# Traefik handles TLS via Let's Encrypt automatically.
+
+services:
+
+  # ─── Reverse Proxy ──────────────────────────────────────────────
+  traefik:
+    image: traefik:v3.2
+    container_name: ragu-traefik
+    command:
+      - "--api.dashboard=true"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedByDefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
+      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
+      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@pragmata.cloud}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - letsencrypt-data:/letsencrypt
+    restart: unless-stopped
+    labels:
+      # Traefik dashboard at traefik.ragu.pragmata.cloud (optional)
+      - "traefik.enable=true"
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.ragu.pragmata.cloud`)"
+      - "traefik.http.routers.dashboard.entrypoints=websecure"
+      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
+      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH:-}"
+
+  # ─── Frontend (React + Nginx) ──────────────────────────────────
+  web:
+    build:
+      context: ./apps/web
+      dockerfile: Dockerfile
+    container_name: ragu-web
+    depends_on:
+      - gateway
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.web.rule=Host(`ragu.pragmata.cloud`)"
+      - "traefik.http.routers.web.entrypoints=websecure"
+      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
+      - "traefik.http.services.web.loadbalancer.server.port=80"
+
+  # ─── API Gateway (Hono + Bun) ──────────────────────────────────
+  gateway:
+    build:
+      context: ./apps/gateway
+      dockerfile: Dockerfile
+    container_name: ragu-gateway
+    environment:
+      PORT: "3000"
+      OLLAMA_SERVICE_URL: http://ollama:11434
+      RAG_SERVICE_URL: http://rag:8000
+    depends_on:
+      rag:
+        condition: service_healthy
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=false"
+
+  # ─── RAG Backend (FastAPI + Python) ────────────────────────────
+  rag:
+    build:
+      context: ./services/rag
+      dockerfile: Dockerfile
+    container_name: ragu-rag
+    environment:
+      VECTOR_DB: ${VECTOR_DB:-hybrid}
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-ragu}:${POSTGRES_PASSWORD:-ragu_local}@postgres:5432/${POSTGRES_DB:-ragu}
+      QDRANT_URL: http://qdrant:6333
+      REDIS_URL: redis://redis:6379/0
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-ragu}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-ragu_local_s3}
+      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
+      CHUNK_SIZE: ${CHUNK_SIZE:-500}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-50}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    labels:
+      - "traefik.enable=false"
+
+  # ─── Ollama (LLM Runtime) ──────────────────────────────────────
+  ollama:
+    image: ollama/ollama:latest
+    container_name: ragu-ollama
+    volumes:
+      - ollama-data:/root/.ollama
+    restart: unless-stopped
+    # GPU passthrough (uncomment for GPU-enabled droplets):
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: all
+    #           capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    labels:
+      - "traefik.enable=false"
+
+  # ─── Data Stores ───────────────────────────────────────────────
+  postgres:
+    image: pgvector/pgvector:pg17
+    container_name: ragu-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ragu}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-ragu_local}
+      POSTGRES_DB: ${POSTGRES_DB:-ragu}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./services/rag/init.sql:/docker-entrypoint-initdb.d/init.sql
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ragu}"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+  minio:
+    image: minio/minio:latest
+    container_name: ragu-minio
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-ragu}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-ragu_local_s3}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: ragu-qdrant
+    volumes:
+      - qdrant-data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:6333/readyz"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+  redis:
+    image: redis:7-alpine
+    container_name: ragu-redis
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    labels:
+      - "traefik.enable=false"
+
+volumes:
+  letsencrypt-data:
+  postgres-data:
+  minio-data:
+  qdrant-data:
+  redis-data:
+  ollama-data:
