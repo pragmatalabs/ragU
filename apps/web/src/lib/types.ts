@@ -60,3 +60,10 @@ export interface StoredFile {
   size: number;
   modified: string | null;
 }
+
+export interface AgentConfigItem {
+  id: string;
+  name: string;
+  content: string;
+  enabled: boolean;
+}

@@ -14,9 +14,12 @@ chatRoutes.post("/", async (c) => {
       model: body.model || "llama3.2:3b",
       messages: body.messages || [],
       stream: true,
+      keep_alive: "30m",
       options: {
         temperature: body.temperature ?? 0.7,
         top_p: body.top_p ?? 0.9,
+        num_predict: body.num_predict ?? 512,
+        num_ctx: body.num_ctx ?? 4096,
       },
     }),
   });

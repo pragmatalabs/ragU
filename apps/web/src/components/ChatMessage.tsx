@@ -5,7 +5,17 @@ import type { Message } from "../lib/types";
 import { Bot, User, Copy, Check } from "lucide-react";
 import { useState, useCallback } from "react";
 
-function CopyButton({ text }: { text: string }) {
+function CopyButton({
+  text,
+  label = "Copy",
+  className = "top-2 right-2",
+  group,
+}: {
+  text: string;
+  label?: string;
+  className?: string;
+  group?: string;
+}) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = useCallback(() => {
@@ -15,11 +25,15 @@ function CopyButton({ text }: { text: string }) {
     });
   }, [text]);
 
+  const hoverClass = group
+    ? `opacity-0 group-hover/${group}:opacity-100`
+    : "opacity-0 group-hover/msg:opacity-100";
+
   return (
     <button
       onClick={handleCopy}
-      className="absolute top-2 right-2 p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 opacity-0 group-hover:opacity-100 transition-opacity"
-      title="Copy code"
+      className={`absolute ${className} p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 ${hoverClass} transition-opacity z-10`}
+      title={label}
     >
       {copied ? <Check size={14} /> : <Copy size={14} />}
     </button>
@@ -44,30 +58,32 @@ export function ChatMessage({ message }: { message: Message }) {
         ) : isUser ? (
           <p className="whitespace-pre-wrap">{message.content || "..."}</p>
         ) : (
-          <ReactMarkdown
-            remarkPlugins={[remarkGfm]}
-            rehypePlugins={[rehypeHighlight]}
-            components={{
-              pre({ children, ...props }) {
-                // Extract code text for copy button
-                const codeText =
-                  typeof children === "object" &&
-                  children !== null &&
-                  "props" in (children as React.ReactElement)
-                    ? ((children as React.ReactElement).props as { children?: string })
-                        .children || ""
-                    : "";
-                return (
-                  <div className="relative group">
-                    <CopyButton text={String(codeText)} />
-                    <pre {...props}>{children}</pre>
-                  </div>
-                );
-              },
-            }}
-          >
-            {message.content || "..."}
-          </ReactMarkdown>
+          <div className="relative group/msg">
+            <CopyButton text={message.content || ""} label="Copy response" className="top-0 right-0" />
+            <ReactMarkdown
+              remarkPlugins={[remarkGfm]}
+              rehypePlugins={[rehypeHighlight]}
+              components={{
+                pre({ children, ...props }) {
+                  const codeText =
+                    typeof children === "object" &&
+                    children !== null &&
+                    "props" in (children as React.ReactElement)
+                      ? ((children as React.ReactElement).props as { children?: string })
+                          .children || ""
+                      : "";
+                  return (
+                    <div className="relative group/code">
+                      <CopyButton text={String(codeText)} label="Copy code" className="top-2 right-2" group="code" />
+                      <pre {...props}>{children}</pre>
+                    </div>
+                  );
+                },
+              }}
+            >
+              {message.content || "..."}
+            </ReactMarkdown>
+          </div>
         )}
       </div>
     </div>

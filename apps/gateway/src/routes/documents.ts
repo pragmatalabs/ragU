@@ -49,6 +49,18 @@ documentsRoutes.get("/status/:jobId", async (c) => {
   }
 });
 
+// Delete a file from MinIO
+documentsRoutes.delete("/:key{.+}", async (c) => {
+  try {
+    const key = c.req.param("key");
+    const resp = await fetch(ragUrl(`/files/${key}`), { method: "DELETE" });
+    if (!resp.ok) return c.json({ error: "Delete failed" }, 502);
+    return c.json(await resp.json());
+  } catch (err) {
+    return c.json({ error: "Delete failed", details: String(err) }, 500);
+  }
+});
+
 // List files from MinIO
 documentsRoutes.get("/", async (c) => {
   try {

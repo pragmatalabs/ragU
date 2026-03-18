@@ -2,7 +2,55 @@ import { useCallback } from "react";
 import { useChatStore } from "../stores/chatStore";
 import { useSettingsStore } from "../stores/settingsStore";
 import { streamChat, ragQuery } from "../lib/api";
-import type { Message } from "../lib/types";
+import type { Message, AgentConfigItem } from "../lib/types";
+
+function compileAgentPrompt(
+  instructions: AgentConfigItem[],
+  skills: AgentConfigItem[],
+  guardrails: AgentConfigItem[],
+  tools: AgentConfigItem[]
+): string {
+  const parts: string[] = [];
+
+  const enabledInstructions = instructions.filter(
+    (i) => i.enabled && i.content.trim()
+  );
+  if (enabledInstructions.length > 0) {
+    parts.push(enabledInstructions.map((i) => i.content.trim()).join("\n\n"));
+  }
+
+  const enabledSkills = skills.filter((s) => s.enabled && s.content.trim());
+  if (enabledSkills.length > 0) {
+    parts.push(
+      "## Skills\n" +
+        enabledSkills
+          .map((s) => `- **${s.name}**: ${s.content.trim()}`)
+          .join("\n")
+    );
+  }
+
+  const enabledGuardrails = guardrails.filter(
+    (g) => g.enabled && g.content.trim()
+  );
+  if (enabledGuardrails.length > 0) {
+    parts.push(
+      "## Guardrails\n" +
+        enabledGuardrails.map((g) => `- ${g.content.trim()}`).join("\n")
+    );
+  }
+
+  const enabledTools = tools.filter((t) => t.enabled && t.content.trim());
+  if (enabledTools.length > 0) {
+    parts.push(
+      "## Available Tools\n" +
+        enabledTools
+          .map((t) => `- **${t.name}**: ${t.content.trim()}`)
+          .join("\n")
+    );
+  }
+
+  return parts.join("\n\n---\n\n");
+}
 
 export function useChat() {
   const {
@@ -17,8 +65,20 @@ export function useChat() {
     setStreaming,
   } = useChatStore();
 
-  const { model, ragEnabled, collection, temperature, topP, topK, systemPrompt } =
-    useSettingsStore();
+  const {
+    model,
+    ragEnabled,
+    collection,
+    temperature,
+    topP,
+    topK,
+    numPredict,
+    numCtx,
+    instructions,
+    skills,
+    guardrails,
+    tools,
+  } = useSettingsStore();
 
   const activeSession = sessions.find((s) => s.id === activeSessionId);
 
@@ -32,18 +92,21 @@ export function useChat() {
       const userMessage: Message = { role: "user", content };
       addMessage(sessionId, userMessage);
 
-      const allMessages = [
-        ...(activeSession?.messages ?? []),
-        userMessage,
-      ];
+      const allMessages = [...(activeSession?.messages ?? []), userMessage];
 
-      // Build system prompt from agent guidelines + RAG context
+      // Build system prompt from structured agent configs
       let messagesForLLM = allMessages;
       const systemParts: string[] = [];
 
-      // Agent guidelines (always prepended if set)
-      if (systemPrompt.trim()) {
-        systemParts.push(systemPrompt.trim());
+      // Compile agent config (instructions, skills, guardrails, tools)
+      const agentPrompt = compileAgentPrompt(
+        instructions,
+        skills,
+        guardrails,
+        tools
+      );
+      if (agentPrompt) {
+        systemParts.push(agentPrompt);
       }
 
       // RAG context
@@ -54,7 +117,7 @@ export function useChat() {
 
           if (result.context) {
             systemParts.push(
-              `Use the following context to answer the question. If the context doesn't contain relevant information, say so.\n\n${result.context}`
+              `## Reference Documents\n\n${result.context}\n\n---\nAnswer ONLY based on the documents above. Do not use outside knowledge. If the answer is not in the documents, say so.`
             );
           }
         } catch (err) {
@@ -81,6 +144,8 @@ export function useChat() {
         for await (const chunk of streamChat(messagesForLLM, model, {
           temperature,
           top_p: topP,
+          num_predict: numPredict,
+          num_ctx: numCtx,
         })) {
           fullContent += chunk;
           updateLastAssistantMessage(sessionId, fullContent);
@@ -104,7 +169,12 @@ export function useChat() {
       temperature,
       topP,
       topK,
-      systemPrompt,
+      numPredict,
+      numCtx,
+      instructions,
+      skills,
+      guardrails,
+      tools,
       createSession,
       addMessage,
       updateLastAssistantMessage,

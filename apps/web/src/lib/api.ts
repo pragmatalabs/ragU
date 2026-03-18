@@ -27,7 +27,7 @@ export async function pullModel(name: string): Promise<void> {
 export async function* streamChat(
   messages: Message[],
   model: string,
-  options?: { temperature?: number; top_p?: number }
+  options?: { temperature?: number; top_p?: number; num_predict?: number; num_ctx?: number }
 ): AsyncGenerator<string> {
   const resp = await fetch(`${API}/chat`, {
     method: "POST",
@@ -119,4 +119,10 @@ export async function fetchDocuments(
     `${API}/documents?collection=${encodeURIComponent(collection)}`
   );
   return resp.json();
+}
+
+export async function deleteFile(key: string): Promise<void> {
+  await fetch(`${API}/documents/${encodeURIComponent(key)}`, {
+    method: "DELETE",
+  });
 }

@@ -3,11 +3,12 @@ import { useChat } from "../hooks/useChat";
 import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { useSettingsStore } from "../stores/settingsStore";
-import { Database, MessageSquare } from "lucide-react";
+import { Database, MessageSquare, AlertTriangle } from "lucide-react";
 
 export function Chat() {
   const { activeSession, streaming, ragSources, sendMessage } = useChat();
   const ragEnabled = useSettingsStore((s) => s.ragEnabled);
+  const collection = useSettingsStore((s) => s.collection);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -69,6 +70,25 @@ export function Chat() {
           </div>
         </div>
       )}
+
+      {/* RAG status indicator */}
+      <div className="px-4 py-1.5 border-t border-gray-800/50">
+        <div className="max-w-3xl mx-auto flex items-center gap-2 text-xs">
+          {ragEnabled ? (
+            <>
+              <Database size={12} className="text-emerald-500" />
+              <span className="text-emerald-500">RAG on</span>
+              <span className="text-gray-600">·</span>
+              <span className="text-gray-500">collection: <strong className="text-gray-400">{collection || "default"}</strong></span>
+            </>
+          ) : (
+            <>
+              <AlertTriangle size={12} className="text-yellow-600" />
+              <span className="text-yellow-600/70">RAG off — uploaded documents won't be used. Enable RAG in the sidebar.</span>
+            </>
+          )}
+        </div>
+      </div>
 
       <ChatInput onSend={sendMessage} disabled={streaming} />
     </div>

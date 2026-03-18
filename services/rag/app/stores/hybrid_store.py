@@ -94,7 +94,7 @@ class HybridStore(VectorStore):
             async with self.pg.pool.acquire() as conn:
                 rows = await conn.fetch(
                     """
-                    SELECT id, embedding::text, content, chunk_index
+                    SELECT id, embedding::text, content, chunk_index, metadata
                     FROM documents
                     WHERE collection = $1 AND embedding IS NOT NULL
                     """,
@@ -112,6 +112,7 @@ class HybridStore(VectorStore):
                     payload={
                         "content": row["content"],
                         "chunk_index": row["chunk_index"],
+                        "metadata": json.loads(row["metadata"]) if row["metadata"] else {},
                     },
                 )
                 for row in rows
@@ -144,10 +145,10 @@ class HybridStore(VectorStore):
                     PointStruct(
                         id=pg_id,
                         vector=emb,
-                        payload={"content": text, "chunk_index": i},
+                        payload={"content": text, "chunk_index": i, "metadata": meta},
                     )
-                    for pg_id, i, text, emb in zip(
-                        ids, range(len(texts)), texts, embeddings
+                    for pg_id, i, text, emb, meta in zip(
+                        ids, range(len(texts)), texts, embeddings, metadata
                     )
                 ]
                 await self.qdrant.upsert(
@@ -182,7 +183,7 @@ class HybridStore(VectorStore):
         query_text: str,
         top_k: int,
         rrf_k: int = 60,
-        kw_weight: float = 1.5,
+        kw_weight: float = 3.0,
         candidate_multiplier: int = 4,
     ) -> list[SearchResult]:
         """Fuse Qdrant ANN results + PG keyword results via RRF in Python."""
@@ -208,7 +209,7 @@ class HybridStore(VectorStore):
                 SearchResult(
                     content=hit.payload.get("content", "") if hit.payload else "",
                     score=hit.score if hit.score is not None else 0.0,
-                    metadata={},
+                    metadata=hit.payload.get("metadata", {}) if hit.payload else {},
                     chunk_index=(
                         hit.payload.get("chunk_index", 0) if hit.payload else 0
                     ),
@@ -275,16 +276,21 @@ class HybridStore(VectorStore):
         # Sort by fused score descending
         scored.sort(key=lambda x: x[1], reverse=True)
 
-        # Build results
+        # Build results — prefer kw_data metadata (has filename) over vec_data (empty)
         results: list[SearchResult] = []
         for doc_id, score in scored[:top_k]:
-            data = vec_data.get(doc_id) or kw_data.get(doc_id, {})
+            vd = vec_data.get(doc_id, {})
+            kd = kw_data.get(doc_id, {})
+            # Use kw_data metadata if vec_data has none (Qdrant payloads lack filename)
+            metadata = kd.get("metadata", {}) if kd.get("metadata") else vd.get("metadata", {})
+            content = vd.get("content") or kd.get("content", "")
+            chunk_index = vd.get("chunk_index") if vd else kd.get("chunk_index", 0)
             results.append(
                 SearchResult(
-                    content=data.get("content", ""),
+                    content=content,
                     score=score,
-                    metadata=data.get("metadata", {}),
-                    chunk_index=data.get("chunk_index", 0),
+                    metadata=metadata,
+                    chunk_index=chunk_index,
                 )
             )
 

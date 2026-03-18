@@ -23,7 +23,12 @@ async def rag_query(req: QueryRequest):
         req.collection, embedding, top_k=req.top_k, query_text=req.question
     )
 
-    context = "\n\n---\n\n".join(r.content for r in results)
+    # Sort by filename + chunk_index so context reads in document order
+    sorted_for_context = sorted(
+        results,
+        key=lambda r: (r.metadata.get("filename", ""), r.chunk_index),
+    )
+    context = "\n\n---\n\n".join(r.content for r in sorted_for_context)
     sources = [
         {
             "content": r.content[:200],
