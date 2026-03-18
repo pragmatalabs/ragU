@@ -36,8 +36,8 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      provider: "ollama",
-      model: "llama3.2:3b",
+      provider: "groq",
+      model: "groq/llama-3.3-70b-versatile",
       ragEnabled: false,
       collection: "default",
       temperature: 0.3,
