@@ -38,7 +38,7 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       provider: "groq",
       model: "groq/llama-3.3-70b-versatile",
-      ragEnabled: false,
+      ragEnabled: true,
       collection: "default",
       temperature: 0.3,
       topP: 0.9,
