@@ -1,45 +1,18 @@
-# Production compose for Digital Ocean with Traefik
+# Production compose for Digital Ocean
 # Domain: ragu.pragmata.cloud
+# Uses existing Traefik from /opt/infra (traefik-public network)
 #
 # Usage:
-#   cp .env.production .env
+#   cp .env.production .env   # edit passwords
 #   docker compose -f docker-compose.prod.yml up -d
-#
-# Traefik handles TLS via Let's Encrypt automatically.
+
+networks:
+  traefik-public:
+    external: true
+  ragu-internal:
+    driver: bridge
 
 services:
-
-  # ─── Reverse Proxy ──────────────────────────────────────────────
-  traefik:
-    image: traefik:v3.2
-    container_name: ragu-traefik
-    command:
-      - "--api.dashboard=true"
-      - "--providers.docker=true"
-      - "--providers.docker.exposedByDefault=false"
-      - "--entrypoints.web.address=:80"
-      - "--entrypoints.websecure.address=:443"
-      - "--entrypoints.web.http.redirections.entryPoint.to=websecure"
-      - "--entrypoints.web.http.redirections.entryPoint.scheme=https"
-      - "--certificatesresolvers.letsencrypt.acme.tlschallenge=true"
-      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@pragmata.cloud}"
-      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
-    ports:
-      - "80:80"
-      - "443:443"
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - letsencrypt-data:/letsencrypt
-    restart: unless-stopped
-    labels:
-      # Traefik dashboard at traefik.ragu.pragmata.cloud (optional)
-      - "traefik.enable=true"
-      - "traefik.http.routers.dashboard.rule=Host(`traefik.ragu.pragmata.cloud`)"
-      - "traefik.http.routers.dashboard.entrypoints=websecure"
-      - "traefik.http.routers.dashboard.tls.certresolver=letsencrypt"
-      - "traefik.http.routers.dashboard.service=api@internal"
-      - "traefik.http.routers.dashboard.middlewares=dashboard-auth"
-      - "traefik.http.middlewares.dashboard-auth.basicauth.users=${TRAEFIK_DASHBOARD_AUTH:-}"
 
   # ─── Frontend (React + Nginx) ──────────────────────────────────
   web:
@@ -50,12 +23,16 @@ services:
     depends_on:
       - gateway
     restart: unless-stopped
+    networks:
+      - traefik-public
+      - ragu-internal
     labels:
       - "traefik.enable=true"
-      - "traefik.http.routers.web.rule=Host(`ragu.pragmata.cloud`)"
-      - "traefik.http.routers.web.entrypoints=websecure"
-      - "traefik.http.routers.web.tls.certresolver=letsencrypt"
-      - "traefik.http.services.web.loadbalancer.server.port=80"
+      - "traefik.http.routers.ragu.rule=Host(`ragu.pragmata.cloud`)"
+      - "traefik.http.routers.ragu.entrypoints=websecure"
+      - "traefik.http.routers.ragu.tls.certresolver=letsencrypt"
+      - "traefik.http.services.ragu.loadbalancer.server.port=80"
+      - "traefik.docker.network=traefik-public"
 
   # ─── API Gateway (Hono + Bun) ──────────────────────────────────
   gateway:
@@ -65,14 +42,14 @@ services:
     container_name: ragu-gateway
     environment:
       PORT: "3000"
-      OLLAMA_SERVICE_URL: http://ollama:11434
-      RAG_SERVICE_URL: http://rag:8000
+      OLLAMA_SERVICE_URL: http://ragu-ollama:11434
+      RAG_SERVICE_URL: http://ragu-rag:8000
     depends_on:
       rag:
         condition: service_healthy
     restart: unless-stopped
-    labels:
-      - "traefik.enable=false"
+    networks:
+      - ragu-internal
 
   # ─── RAG Backend (FastAPI + Python) ────────────────────────────
   rag:
@@ -82,13 +59,13 @@ services:
     container_name: ragu-rag
     environment:
       VECTOR_DB: ${VECTOR_DB:-hybrid}
-      POSTGRES_URL: postgresql://${POSTGRES_USER:-ragu}:${POSTGRES_PASSWORD:-ragu_local}@postgres:5432/${POSTGRES_DB:-ragu}
-      QDRANT_URL: http://qdrant:6333
-      REDIS_URL: redis://redis:6379/0
-      MINIO_ENDPOINT: minio:9000
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-ragu}:${POSTGRES_PASSWORD:-ragu_local}@ragu-postgres:5432/${POSTGRES_DB:-ragu}
+      QDRANT_URL: http://ragu-qdrant:6333
+      REDIS_URL: redis://ragu-redis:6379/0
+      MINIO_ENDPOINT: ragu-minio:9000
       MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-ragu}
       MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-ragu_local_s3}
-      OLLAMA_HOST: ${OLLAMA_HOST:-http://ollama:11434}
+      OLLAMA_HOST: http://ragu-ollama:11434
       OLLAMA_EMBED_MODEL: ${OLLAMA_EMBED_MODEL:-nomic-embed-text}
       CHUNK_SIZE: ${CHUNK_SIZE:-500}
       CHUNK_OVERLAP: ${CHUNK_OVERLAP:-50}
@@ -106,8 +83,8 @@ services:
       timeout: 5s
       retries: 5
       start_period: 15s
-    labels:
-      - "traefik.enable=false"
+    networks:
+      - ragu-internal
 
   # ─── Ollama (LLM Runtime) ──────────────────────────────────────
   ollama:
@@ -116,22 +93,14 @@ services:
     volumes:
       - ollama-data:/root/.ollama
     restart: unless-stopped
-    # GPU passthrough (uncomment for GPU-enabled droplets):
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: all
-    #           capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:11434/"]
       interval: 10s
       timeout: 5s
       retries: 10
       start_period: 30s
-    labels:
-      - "traefik.enable=false"
+    networks:
+      - ragu-internal
 
   # ─── Data Stores ───────────────────────────────────────────────
   postgres:
@@ -150,8 +119,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    labels:
-      - "traefik.enable=false"
+    networks:
+      - ragu-internal
 
   minio:
     image: minio/minio:latest
@@ -168,8 +137,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    labels:
-      - "traefik.enable=false"
+    networks:
+      - ragu-internal
 
   qdrant:
     image: qdrant/qdrant:latest
@@ -182,8 +151,8 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    labels:
-      - "traefik.enable=false"
+    networks:
+      - ragu-internal
 
   redis:
     image: redis:7-alpine
@@ -197,11 +166,10 @@ services:
       interval: 5s
       timeout: 3s
       retries: 5
-    labels:
-      - "traefik.enable=false"
+    networks:
+      - ragu-internal
 
 volumes:
-  letsencrypt-data:
   postgres-data:
   minio-data:
   qdrant-data:
