@@ -27,7 +27,7 @@ export async function pullModel(name: string): Promise<void> {
 export async function* streamChat(
   messages: Message[],
   model: string,
-  options?: { temperature?: number; top_p?: number; num_predict?: number; num_ctx?: number }
+  options?: { temperature?: number; top_p?: number; num_predict?: number; num_ctx?: number; provider?: string }
 ): AsyncGenerator<string> {
   const resp = await fetch(`${API}/chat`, {
     method: "POST",

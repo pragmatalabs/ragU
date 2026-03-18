@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { ragUrl } from "../lib/ollama";
+import { ragUrl } from "../lib/providers";
 
 export const documentsRoutes = new Hono();
 

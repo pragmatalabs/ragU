@@ -66,6 +66,7 @@ export function useChat() {
   } = useChatStore();
 
   const {
+    provider,
     model,
     ragEnabled,
     collection,
@@ -146,6 +147,7 @@ export function useChat() {
           top_p: topP,
           num_predict: numPredict,
           num_ctx: numCtx,
+          provider,
         })) {
           fullContent += chunk;
           updateLastAssistantMessage(sessionId, fullContent);
@@ -163,6 +165,7 @@ export function useChat() {
     [
       activeSessionId,
       activeSession,
+      provider,
       model,
       ragEnabled,
       collection,

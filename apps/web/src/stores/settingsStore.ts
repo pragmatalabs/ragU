@@ -3,6 +3,7 @@ import { persist } from "zustand/middleware";
 import type { AgentConfigItem } from "../lib/types";
 
 interface SettingsState {
+  provider: string; // "ollama" | "groq"
   model: string;
   ragEnabled: boolean;
   collection: string;
@@ -16,6 +17,7 @@ interface SettingsState {
   skills: AgentConfigItem[];
   guardrails: AgentConfigItem[];
   tools: AgentConfigItem[];
+  setProvider: (provider: string) => void;
   setModel: (model: string) => void;
   setRagEnabled: (enabled: boolean) => void;
   setCollection: (collection: string) => void;
@@ -34,6 +36,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
+      provider: "ollama",
       model: "llama3.2:3b",
       ragEnabled: false,
       collection: "default",
@@ -47,6 +50,7 @@ export const useSettingsStore = create<SettingsState>()(
       skills: [],
       guardrails: [],
       tools: [],
+      setProvider: (provider) => set({ provider }),
       setModel: (model) => set({ model }),
       setRagEnabled: (ragEnabled) => set({ ragEnabled }),
       setCollection: (collection) => set({ collection }),

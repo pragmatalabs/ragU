@@ -44,6 +44,8 @@ services:
       PORT: "3000"
       OLLAMA_SERVICE_URL: http://ragu-ollama:11434
       RAG_SERVICE_URL: http://ragu-rag:8000
+      LLM_PROVIDER: ${LLM_PROVIDER:-groq}
+      GROQ_API_KEY: ${GROQ_API_KEY:-}
     depends_on:
       rag:
         condition: service_healthy
