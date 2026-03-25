@@ -9,6 +9,8 @@ import {
   AlertTriangle,
   Lightbulb,
   ArrowRight,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 
 export function Chat() {
@@ -17,6 +19,7 @@ export function Chat() {
   const collection = useSettingsStore((s) => s.collection);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -89,32 +92,39 @@ export function Chat() {
         )}
       </div>
 
-      {/* RAG Sources */}
+      {/* RAG Sources — collapsed by default */}
       {ragSources.length > 0 && (
-        <div className="border-t border-gray-800 px-4 py-2 max-h-32 overflow-y-auto">
+        <div className="border-t border-gray-800 px-4">
           <div className="max-w-3xl mx-auto">
-            <p className="text-xs text-gray-500 mb-1 flex items-center gap-1">
-              <Database size={12} /> Retrieved sources
-            </p>
-            <div className="flex gap-2 flex-wrap">
-              {ragSources.map((s, i) => {
-                const filename =
-                  (s.metadata?.filename as string) || `chunk #${s.chunk_index}`;
-                const shortName =
-                  filename.length > 30
-                    ? filename.slice(0, 27) + "..."
-                    : filename;
-                return (
-                  <span
-                    key={i}
-                    className="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700 cursor-help"
-                    title={`${filename}\n\n${s.content.slice(0, 200)}...`}
-                  >
-                    {shortName} ({(s.score * 100).toFixed(1)}%)
-                  </span>
-                );
-              })}
-            </div>
+            <button
+              onClick={() => setSourcesOpen(!sourcesOpen)}
+              className="flex items-center gap-1.5 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors w-full"
+            >
+              {sourcesOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              <Database size={12} />
+              Retrieved sources ({ragSources.length})
+            </button>
+            {sourcesOpen && (
+              <div className="flex gap-2 flex-wrap pb-2">
+                {ragSources.map((s, i) => {
+                  const filename =
+                    (s.metadata?.filename as string) || `chunk #${s.chunk_index}`;
+                  const shortName =
+                    filename.length > 30
+                      ? filename.slice(0, 27) + "..."
+                      : filename;
+                  return (
+                    <span
+                      key={i}
+                      className="text-xs bg-gray-800 px-2 py-1 rounded border border-gray-700 cursor-help"
+                      title={`${filename}\n\n${s.content.slice(0, 200)}...`}
+                    >
+                      {shortName} ({(s.score * 100).toFixed(1)}%)
+                    </span>
+                  );
+                })}
+              </div>
+            )}
           </div>
         </div>
       )}
