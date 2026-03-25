@@ -7,9 +7,15 @@ import {
   resolveProvider,
   groqModelId,
 } from "../lib/providers";
-import { logInteraction, voteInteraction, getCachedResponse } from "../lib/db";
+import { logInteraction, voteInteraction, getCachedResponse, getSuggestedQuestions } from "../lib/db";
 
 export const chatRoutes = new Hono();
+
+// ─── Suggested questions (public) ────────────────────────────
+chatRoutes.get("/suggestions", async (c) => {
+  const suggestions = await getSuggestedQuestions(4);
+  return c.json({ suggestions });
+});
 
 // ─── Vote endpoint (public) ──────────────────────────────────
 chatRoutes.post("/vote", async (c) => {

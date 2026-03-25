@@ -92,6 +92,28 @@ export async function getInteractionStats(): Promise<{
 
 // ─── Vote + Cache ────────────────────────────────────────────
 
+export async function getSuggestedQuestions(limit: number = 4): Promise<string[]> {
+  try {
+    // Prefer cached (voted-good) questions, then fall back to recent unique questions
+    const rows = (await query(
+      `(SELECT DISTINCT ON (question_hash) question FROM response_cache
+       WHERE vote_count > 0
+       ORDER BY question_hash, vote_count DESC
+       LIMIT $1)
+      UNION ALL
+      (SELECT DISTINCT ON (question) question FROM interaction_log
+       WHERE LENGTH(question) > 10 AND LENGTH(question) < 200
+       ORDER BY question, created_at DESC
+       LIMIT $1)
+      LIMIT $1`,
+      [limit]
+    )) as { question: string }[];
+    return rows.map((r) => r.question).slice(0, limit);
+  } catch {
+    return [];
+  }
+}
+
 function hashQuestion(q: string): string {
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(q.trim().toLowerCase());

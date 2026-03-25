@@ -121,6 +121,17 @@ export async function fetchDocuments(
   return resp.json();
 }
 
+export async function fetchSuggestions(): Promise<string[]> {
+  try {
+    const resp = await fetch(`${API}/chat/suggestions`);
+    if (!resp.ok) return [];
+    const data = await resp.json();
+    return data.suggestions || [];
+  } catch {
+    return [];
+  }
+}
+
 export async function voteResponse(data: {
   question: string;
   answer: string;
