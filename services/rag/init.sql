@@ -33,3 +33,26 @@ CREATE TABLE IF NOT EXISTS interaction_log (
 );
 
 CREATE INDEX IF NOT EXISTS idx_interaction_log_created ON interaction_log(created_at DESC);
+
+-- Vote column on interaction_log
+DO $$ BEGIN
+  ALTER TABLE interaction_log ADD COLUMN vote SMALLINT DEFAULT 0;
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+-- Response cache: voted-good answers reused for similar questions
+CREATE TABLE IF NOT EXISTS response_cache (
+    id SERIAL PRIMARY KEY,
+    question_hash VARCHAR(64) NOT NULL,
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    model VARCHAR(255),
+    provider VARCHAR(64),
+    collection VARCHAR(255),
+    vote_count INTEGER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT NOW(),
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_response_cache_hash ON response_cache (question_hash, collection);
+CREATE INDEX IF NOT EXISTS idx_response_cache_lookup ON response_cache (question_hash);

@@ -90,6 +90,68 @@ export async function getInteractionStats(): Promise<{
   };
 }
 
+// ─── Vote + Cache ────────────────────────────────────────────
+
+function hashQuestion(q: string): string {
+  const hasher = new Bun.CryptoHasher("sha256");
+  hasher.update(q.trim().toLowerCase());
+  return hasher.digest("hex");
+}
+
+export async function voteInteraction(
+  question: string,
+  answer: string,
+  collection: string,
+  model: string,
+  provider: string,
+  vote: 1 | -1
+): Promise<void> {
+  try {
+    // Update vote on most recent matching interaction
+    await query(
+      `UPDATE interaction_log SET vote = $1
+       WHERE id = (
+         SELECT id FROM interaction_log
+         WHERE question = $2 AND answer = $3
+         ORDER BY created_at DESC LIMIT 1
+       )`,
+      [vote, question, answer]
+    );
+
+    // If upvoted, add to response cache for future users
+    if (vote === 1) {
+      const qHash = hashQuestion(question);
+      await query(
+        `INSERT INTO response_cache (question_hash, question, answer, model, provider, collection)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (question_hash, collection)
+         DO UPDATE SET answer = $3, vote_count = response_cache.vote_count + 1, updated_at = NOW()`,
+        [qHash, question.trim(), answer, model, provider, collection]
+      );
+    }
+  } catch (err) {
+    console.error("Failed to record vote:", err);
+  }
+}
+
+export async function getCachedResponse(
+  question: string,
+  collection: string
+): Promise<{ answer: string; model: string } | null> {
+  try {
+    const qHash = hashQuestion(question);
+    const rows = (await query(
+      `SELECT answer, model FROM response_cache
+       WHERE question_hash = $1 AND collection = $2 AND vote_count > 0
+       ORDER BY vote_count DESC, updated_at DESC LIMIT 1`,
+      [qHash, collection]
+    )) as { answer: string; model: string }[];
+    return rows[0] || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function checkDbHealth(): Promise<boolean> {
   try {
     await query("SELECT 1");

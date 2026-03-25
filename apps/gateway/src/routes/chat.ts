@@ -7,9 +7,20 @@ import {
   resolveProvider,
   groqModelId,
 } from "../lib/providers";
-import { logInteraction } from "../lib/db";
+import { logInteraction, voteInteraction, getCachedResponse } from "../lib/db";
 
 export const chatRoutes = new Hono();
+
+// ─── Vote endpoint (public) ──────────────────────────────────
+chatRoutes.post("/vote", async (c) => {
+  const body = await c.req.json();
+  const { question, answer, collection, model, provider, vote } = body;
+  if (!question || !answer || ![1, -1].includes(vote)) {
+    return c.json({ error: "Missing question, answer, or vote (1/-1)" }, 400);
+  }
+  await voteInteraction(question, answer, collection || "default", model || "", provider || "", vote);
+  return c.json({ ok: true });
+});
 
 chatRoutes.post("/", async (c) => {
   const body = await c.req.json();
@@ -20,6 +31,18 @@ chatRoutes.post("/", async (c) => {
   const userMsg = [...messages].reverse().find((m: any) => m.role === "user");
   const question = userMsg?.content || "";
   const hasSystem = messages.some((m: any) => m.role === "system" && m.content?.includes("Reference Documents"));
+
+  // Check response cache first (only for RAG-enabled queries)
+  if (question && body.collection) {
+    const cached = await getCachedResponse(question, body.collection);
+    if (cached) {
+      // Return cached response as a single streaming chunk (same format)
+      return stream(c, async (s) => {
+        await s.write(JSON.stringify({ message: { content: cached.answer } }) + "\n");
+        await s.write(JSON.stringify({ done: true, cached: true }) + "\n");
+      });
+    }
+  }
 
   if (provider === "groq") {
     return handleGroq(c, body, question, hasSystem);

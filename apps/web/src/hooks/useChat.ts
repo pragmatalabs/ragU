@@ -148,6 +148,7 @@ export function useChat() {
           num_predict: numPredict,
           num_ctx: numCtx,
           provider,
+          collection: ragEnabled ? collection : undefined,
         })) {
           fullContent += chunk;
           updateLastAssistantMessage(sessionId, fullContent);

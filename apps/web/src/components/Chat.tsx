@@ -33,8 +33,12 @@ export function Chat() {
           <div className="max-w-3xl mx-auto py-4">
             {activeSession.messages
               .filter((m) => m.role !== "system")
-              .map((msg, i) => (
-                <ChatMessage key={i} message={msg} />
+              .map((msg, i, arr) => (
+                <ChatMessage
+                  key={i}
+                  message={msg}
+                  previousMessage={i > 0 ? arr[i - 1] : undefined}
+                />
               ))}
             <div ref={messagesEndRef} />
           </div>

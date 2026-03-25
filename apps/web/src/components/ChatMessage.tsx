@@ -2,7 +2,18 @@ import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import rehypeHighlight from "rehype-highlight";
 import type { Message } from "../lib/types";
-import { Bot, User, Copy, Check } from "lucide-react";
+import { voteResponse } from "../lib/api";
+import { useSettingsStore } from "../stores/settingsStore";
+import {
+  Bot,
+  User,
+  Copy,
+  Check,
+  ThumbsUp,
+  ThumbsDown,
+  Download,
+  Sparkles,
+} from "lucide-react";
 import { useState, useCallback } from "react";
 
 function CopyButton({
@@ -10,11 +21,13 @@ function CopyButton({
   label = "Copy",
   className = "top-2 right-2",
   group,
+  size = 14,
 }: {
   text: string;
   label?: string;
   className?: string;
   group?: string;
+  size?: number;
 }) {
   const [copied, setCopied] = useState(false);
 
@@ -35,13 +48,121 @@ function CopyButton({
       className={`absolute ${className} p-1.5 rounded bg-gray-700 hover:bg-gray-600 text-gray-300 ${hoverClass} transition-opacity z-10`}
       title={label}
     >
-      {copied ? <Check size={14} /> : <Copy size={14} />}
+      {copied ? <Check size={size} /> : <Copy size={size} />}
     </button>
   );
 }
 
-export function ChatMessage({ message }: { message: Message }) {
+function ActionBar({
+  question,
+  answer,
+}: {
+  question: string;
+  answer: string;
+}) {
+  const [vote, setVote] = useState<1 | -1 | 0>(0);
+  const [copied, setCopied] = useState(false);
+  const { model, provider, collection } = useSettingsStore();
+
+  const handleVote = useCallback(
+    async (v: 1 | -1) => {
+      const newVote = vote === v ? 0 : v;
+      setVote(newVote);
+      if (newVote !== 0) {
+        await voteResponse({
+          question,
+          answer,
+          collection: collection || "default",
+          model,
+          provider,
+          vote: newVote,
+        });
+      }
+    },
+    [vote, question, answer, model, provider, collection]
+  );
+
+  const handleCopy = useCallback(() => {
+    navigator.clipboard.writeText(answer).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  }, [answer]);
+
+  const handleSave = useCallback(() => {
+    const blob = new Blob([answer], { type: "text/markdown" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `response-${Date.now()}.md`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }, [answer]);
+
+  return (
+    <div className="flex items-center gap-1 mt-2 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+      <button
+        onClick={handleCopy}
+        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+        title="Copy response"
+      >
+        {copied ? <Check size={12} /> : <Copy size={12} />}
+        {copied ? "Copied" : "Copy"}
+      </button>
+
+      <button
+        onClick={handleSave}
+        className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
+        title="Save as markdown"
+      >
+        <Download size={12} />
+        Save
+      </button>
+
+      <div className="w-px h-3 bg-gray-800 mx-1" />
+
+      <button
+        onClick={() => handleVote(1)}
+        className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] transition-colors ${
+          vote === 1
+            ? "text-emerald-400 bg-emerald-400/10"
+            : "text-gray-500 hover:text-emerald-400 hover:bg-gray-800"
+        }`}
+        title="Good response — cache for other users"
+      >
+        <ThumbsUp size={12} />
+        {vote === 1 && (
+          <span className="flex items-center gap-0.5">
+            <Sparkles size={10} />
+            Cached
+          </span>
+        )}
+      </button>
+
+      <button
+        onClick={() => handleVote(-1)}
+        className={`flex items-center gap-1 px-2 py-1 rounded text-[11px] transition-colors ${
+          vote === -1
+            ? "text-red-400 bg-red-400/10"
+            : "text-gray-500 hover:text-red-400 hover:bg-gray-800"
+        }`}
+        title="Bad response"
+      >
+        <ThumbsDown size={12} />
+      </button>
+    </div>
+  );
+}
+
+export function ChatMessage({
+  message,
+  previousMessage,
+}: {
+  message: Message;
+  previousMessage?: Message;
+}) {
   const isUser = message.role === "user";
+  const question = previousMessage?.role === "user" ? previousMessage.content : "";
 
   return (
     <div className={`flex gap-3 px-4 py-3 ${isUser ? "" : "bg-gray-900/50"}`}>
@@ -59,7 +180,6 @@ export function ChatMessage({ message }: { message: Message }) {
           <p className="whitespace-pre-wrap">{message.content || "..."}</p>
         ) : (
           <div className="relative group/msg">
-            <CopyButton text={message.content || ""} label="Copy response" className="top-0 right-0" />
             <ReactMarkdown
               remarkPlugins={[remarkGfm]}
               rehypePlugins={[rehypeHighlight]}
@@ -69,12 +189,20 @@ export function ChatMessage({ message }: { message: Message }) {
                     typeof children === "object" &&
                     children !== null &&
                     "props" in (children as React.ReactElement)
-                      ? ((children as React.ReactElement).props as { children?: string })
-                          .children || ""
+                      ? (
+                          (children as React.ReactElement).props as {
+                            children?: string;
+                          }
+                        ).children || ""
                       : "";
                   return (
                     <div className="relative group/code">
-                      <CopyButton text={String(codeText)} label="Copy code" className="top-2 right-2" group="code" />
+                      <CopyButton
+                        text={String(codeText)}
+                        label="Copy code"
+                        className="top-2 right-2"
+                        group="code"
+                      />
                       <pre {...props}>{children}</pre>
                     </div>
                   );
@@ -83,6 +211,11 @@ export function ChatMessage({ message }: { message: Message }) {
             >
               {message.content || "..."}
             </ReactMarkdown>
+
+            {/* Action bar: copy, save, vote */}
+            {message.content && message.content.length > 0 && (
+              <ActionBar question={question} answer={message.content} />
+            )}
           </div>
         )}
       </div>
