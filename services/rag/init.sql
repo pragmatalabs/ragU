@@ -17,3 +17,19 @@ CREATE INDEX IF NOT EXISTS idx_documents_collection ON documents(collection);
 CREATE INDEX IF NOT EXISTS idx_documents_embedding ON documents USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100);
 CREATE INDEX IF NOT EXISTS idx_documents_tsv ON documents USING gin(tsv);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_documents_dedup ON documents (collection, content_hash);
+
+-- Interaction logging for admin dashboard
+CREATE TABLE IF NOT EXISTS interaction_log (
+    id SERIAL PRIMARY KEY,
+    session_id VARCHAR(64),
+    question TEXT NOT NULL,
+    answer TEXT NOT NULL,
+    model VARCHAR(255),
+    provider VARCHAR(64),
+    rag_enabled BOOLEAN DEFAULT FALSE,
+    collection VARCHAR(255),
+    sources_count INTEGER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_interaction_log_created ON interaction_log(created_at DESC);

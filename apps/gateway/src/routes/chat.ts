@@ -7,6 +7,7 @@ import {
   resolveProvider,
   groqModelId,
 } from "../lib/providers";
+import { logInteraction } from "../lib/db";
 
 export const chatRoutes = new Hono();
 
@@ -14,14 +15,20 @@ chatRoutes.post("/", async (c) => {
   const body = await c.req.json();
   const provider = resolveProvider(body.provider);
 
+  // Extract user question for logging
+  const messages = body.messages || [];
+  const userMsg = [...messages].reverse().find((m: any) => m.role === "user");
+  const question = userMsg?.content || "";
+  const hasSystem = messages.some((m: any) => m.role === "system" && m.content?.includes("Reference Documents"));
+
   if (provider === "groq") {
-    return handleGroq(c, body);
+    return handleGroq(c, body, question, hasSystem);
   }
-  return handleOllama(c, body);
+  return handleOllama(c, body, question, hasSystem);
 });
 
 // ─── Ollama (local) ──────────────────────────────────────────
-async function handleOllama(c: any, body: any) {
+async function handleOllama(c: any, body: any, question: string, ragEnabled: boolean) {
   const resp = await fetch(ollamaUrl("/api/chat"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -46,16 +53,41 @@ async function handleOllama(c: any, body: any) {
   return stream(c, async (s) => {
     const reader = resp.body!.getReader();
     const decoder = new TextDecoder();
+    let fullAnswer = "";
+
     while (true) {
       const { done, value } = await reader.read();
       if (done) break;
-      await s.write(decoder.decode(value, { stream: true }));
+      const text = decoder.decode(value, { stream: true });
+      await s.write(text);
+
+      // Capture answer for logging
+      for (const line of text.split("\n").filter(Boolean)) {
+        try {
+          const json = JSON.parse(line);
+          if (json.message?.content) fullAnswer += json.message.content;
+        } catch {}
+      }
+    }
+
+    // Fire-and-forget log
+    if (question) {
+      logInteraction({
+        session_id: body.session_id || "unknown",
+        question,
+        answer: fullAnswer,
+        model: body.model || "llama3.2:3b",
+        provider: "ollama",
+        rag_enabled: ragEnabled,
+        collection: body.collection || "default",
+        sources_count: body.sources_count || 0,
+      });
     }
   });
 }
 
 // ─── Groq (cloud, OpenAI-compatible) ─────────────────────────
-async function handleGroq(c: any, body: any) {
+async function handleGroq(c: any, body: any, question: string, ragEnabled: boolean) {
   if (!GROQ_API_KEY) {
     return c.json({ error: "GROQ_API_KEY not configured" }, 500);
   }
@@ -84,12 +116,11 @@ async function handleGroq(c: any, body: any) {
     return c.json({ error: "Groq request failed", details: errText }, 502);
   }
 
-  // Groq returns SSE: "data: {...}\n\n"
-  // We normalize each chunk to Ollama format: {"message":{"content":"..."}}
   return stream(c, async (s) => {
     const reader = resp.body!.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    let fullAnswer = "";
 
     while (true) {
       const { done, value } = await reader.read();
@@ -97,7 +128,7 @@ async function handleGroq(c: any, body: any) {
 
       buffer += decoder.decode(value, { stream: true });
       const lines = buffer.split("\n");
-      buffer = lines.pop() || ""; // keep incomplete line
+      buffer = lines.pop() || "";
 
       for (const line of lines) {
         const trimmed = line.trim();
@@ -106,6 +137,20 @@ async function handleGroq(c: any, body: any) {
         const data = trimmed.slice(6);
         if (data === "[DONE]") {
           await s.write(JSON.stringify({ done: true }) + "\n");
+
+          // Fire-and-forget log
+          if (question) {
+            logInteraction({
+              session_id: body.session_id || "unknown",
+              question,
+              answer: fullAnswer,
+              model: body.model || "groq/llama-3.3-70b-versatile",
+              provider: "groq",
+              rag_enabled: ragEnabled,
+              collection: body.collection || "default",
+              sources_count: body.sources_count || 0,
+            });
+          }
           return;
         }
 
@@ -113,14 +158,12 @@ async function handleGroq(c: any, body: any) {
           const json = JSON.parse(data);
           const content = json.choices?.[0]?.delta?.content;
           if (content) {
-            // Normalize to Ollama format so frontend parser works unchanged
+            fullAnswer += content;
             await s.write(
               JSON.stringify({ message: { content } }) + "\n"
             );
           }
-        } catch {
-          // skip malformed chunk
-        }
+        } catch {}
       }
     }
   });
