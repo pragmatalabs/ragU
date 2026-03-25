@@ -11,6 +11,16 @@ import { logInteraction, voteInteraction, getCachedResponse, getSuggestedQuestio
 
 export const chatRoutes = new Hono();
 
+/** Extract real client IP from Traefik/proxy headers or direct connection */
+function getClientIp(c: any): string {
+  return (
+    c.req.header("x-real-ip") ||
+    c.req.header("x-forwarded-for")?.split(",")[0]?.trim() ||
+    c.req.header("cf-connecting-ip") ||
+    "unknown"
+  );
+}
+
 // ─── Suggested questions (public) ────────────────────────────
 chatRoutes.get("/suggestions", async (c) => {
   const suggestions = await getSuggestedQuestions(4);
@@ -50,14 +60,16 @@ chatRoutes.post("/", async (c) => {
     }
   }
 
+  const clientIp = getClientIp(c);
+
   if (provider === "groq") {
-    return handleGroq(c, body, question, hasSystem);
+    return handleGroq(c, body, question, hasSystem, clientIp);
   }
-  return handleOllama(c, body, question, hasSystem);
+  return handleOllama(c, body, question, hasSystem, clientIp);
 });
 
 // ─── Ollama (local) ──────────────────────────────────────────
-async function handleOllama(c: any, body: any, question: string, ragEnabled: boolean) {
+async function handleOllama(c: any, body: any, question: string, ragEnabled: boolean, clientIp: string) {
   const resp = await fetch(ollamaUrl("/api/chat"), {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -110,13 +122,14 @@ async function handleOllama(c: any, body: any, question: string, ragEnabled: boo
         rag_enabled: ragEnabled,
         collection: body.collection || "default",
         sources_count: body.sources_count || 0,
+        client_ip: clientIp,
       });
     }
   });
 }
 
 // ─── Groq (cloud, OpenAI-compatible) ─────────────────────────
-async function handleGroq(c: any, body: any, question: string, ragEnabled: boolean) {
+async function handleGroq(c: any, body: any, question: string, ragEnabled: boolean, clientIp: string) {
   if (!GROQ_API_KEY) {
     return c.json({ error: "GROQ_API_KEY not configured" }, 500);
   }
@@ -178,6 +191,7 @@ async function handleGroq(c: any, body: any, question: string, ragEnabled: boole
               rag_enabled: ragEnabled,
               collection: body.collection || "default",
               sources_count: body.sources_count || 0,
+              client_ip: clientIp,
             });
           }
           return;

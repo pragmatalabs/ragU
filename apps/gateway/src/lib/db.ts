@@ -24,11 +24,12 @@ export async function logInteraction(data: {
   rag_enabled: boolean;
   collection: string;
   sources_count: number;
+  client_ip?: string;
 }): Promise<void> {
   try {
     await query(
-      `INSERT INTO interaction_log (session_id, question, answer, model, provider, rag_enabled, collection, sources_count)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+      `INSERT INTO interaction_log (session_id, question, answer, model, provider, rag_enabled, collection, sources_count, client_ip)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
       [
         data.session_id,
         data.question,
@@ -38,6 +39,7 @@ export async function logInteraction(data: {
         data.rag_enabled,
         data.collection,
         data.sources_count,
+        data.client_ip || null,
       ]
     );
   } catch (err) {
@@ -74,19 +76,25 @@ export async function getInteractionStats(): Promise<{
   total: number;
   today: number;
   thisWeek: number;
+  uniqueUsers: number;
+  uniqueUsersToday: number;
 }> {
   const rows = (await query(`
     SELECT
       COUNT(*) as total,
       COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE) as today,
-      COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as this_week
+      COUNT(*) FILTER (WHERE created_at >= CURRENT_DATE - INTERVAL '7 days') as this_week,
+      COUNT(DISTINCT client_ip) FILTER (WHERE client_ip IS NOT NULL) as unique_users,
+      COUNT(DISTINCT client_ip) FILTER (WHERE client_ip IS NOT NULL AND created_at >= CURRENT_DATE) as unique_users_today
     FROM interaction_log
-  `)) as { total: string; today: string; this_week: string }[];
-  const r = rows[0] || { total: "0", today: "0", this_week: "0" };
+  `)) as { total: string; today: string; this_week: string; unique_users: string; unique_users_today: string }[];
+  const r = rows[0] || { total: "0", today: "0", this_week: "0", unique_users: "0", unique_users_today: "0" };
   return {
     total: parseInt(r.total),
     today: parseInt(r.today),
     thisWeek: parseInt(r.this_week),
+    uniqueUsers: parseInt(r.unique_users),
+    uniqueUsersToday: parseInt(r.unique_users_today),
   };
 }
 

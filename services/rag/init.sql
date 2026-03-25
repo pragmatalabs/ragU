@@ -34,11 +34,17 @@ CREATE TABLE IF NOT EXISTS interaction_log (
 
 CREATE INDEX IF NOT EXISTS idx_interaction_log_created ON interaction_log(created_at DESC);
 
--- Vote column on interaction_log
+-- Extra columns on interaction_log
 DO $$ BEGIN
   ALTER TABLE interaction_log ADD COLUMN vote SMALLINT DEFAULT 0;
 EXCEPTION WHEN duplicate_column THEN NULL;
 END $$;
+DO $$ BEGIN
+  ALTER TABLE interaction_log ADD COLUMN client_ip VARCHAR(45);
+EXCEPTION WHEN duplicate_column THEN NULL;
+END $$;
+
+CREATE INDEX IF NOT EXISTS idx_interaction_log_ip ON interaction_log(client_ip);
 
 -- Response cache: voted-good answers reused for similar questions
 CREATE TABLE IF NOT EXISTS response_cache (
