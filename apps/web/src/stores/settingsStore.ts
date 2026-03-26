@@ -67,10 +67,12 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: "ragu-settings",
-      migrate: (persisted: unknown) => {
+      migrate: (persisted: unknown, version: number) => {
         const state = persisted as Record<string, unknown>;
-        // Migrate old systemPrompt to instructions array
+
+        // v0→v1: Migrate old systemPrompt to instructions array
         if (
+          version < 1 &&
           state &&
           typeof state.systemPrompt === "string" &&
           state.systemPrompt &&
@@ -86,9 +88,39 @@ export const useSettingsStore = create<SettingsState>()(
           ];
           state.systemPrompt = "";
         }
+
+        // v1→v2: Add default proactive RAG persona if no instructions exist
+        if (
+          version < 2 &&
+          state &&
+          (!Array.isArray(state.instructions) || state.instructions.length === 0)
+        ) {
+          state.instructions = [
+            {
+              id: "persona-proactive-rag",
+              name: "Proactive RAG Persona",
+              content:
+                "You are a knowledge assistant with access to the user's document collection.\n\n" +
+                "ANSWER BEHAVIOR:\n" +
+                "- Answer the user's explicit question first, concisely.\n" +
+                "- Cite your sources by document name.\n" +
+                "- If retrieved context is insufficient, state this clearly.\n\n" +
+                "PROACTIVE SUGGESTION RULES:\n" +
+                "- After your answer, if the system provides proactive suggestions, present them below a --- separator.\n" +
+                "- For each suggestion, state the type (Related, Outdated, Risk) and a one-line explanation.\n" +
+                "- Cap at 2 suggestions. Be specific — cite the document title and reason.\n" +
+                "- Never interrupt the main answer with suggestions.\n\n" +
+                "TONE:\n" +
+                "- Match the user's register (formal vs casual).\n" +
+                "- Be concise. Prefer bullet points over paragraphs.",
+              enabled: true,
+            },
+          ];
+        }
+
         return state as unknown as SettingsState;
       },
-      version: 1,
+      version: 2,
     }
   )
 );

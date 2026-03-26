@@ -4,6 +4,7 @@ import { ChatMessage } from "./ChatMessage";
 import { ChatInput } from "./ChatInput";
 import { useSettingsStore } from "../stores/settingsStore";
 import { fetchSuggestions } from "../lib/api";
+import type { RagSuggestion } from "../lib/types";
 import {
   Database,
   AlertTriangle,
@@ -11,10 +12,83 @@ import {
   ArrowRight,
   ChevronDown,
   ChevronRight,
+  BookOpen,
+  Clock,
+  ShieldAlert,
 } from "lucide-react";
 
+const SUGGESTION_CONFIG: Record<
+  string,
+  { icon: typeof BookOpen; color: string; border: string; label: string }
+> = {
+  adjacency: {
+    icon: BookOpen,
+    color: "text-blue-400",
+    border: "border-l-blue-500",
+    label: "Related Document",
+  },
+  recency: {
+    icon: Clock,
+    color: "text-amber-400",
+    border: "border-l-amber-500",
+    label: "Potentially Outdated",
+  },
+  risk: {
+    icon: ShieldAlert,
+    color: "text-red-400",
+    border: "border-l-red-500",
+    label: "Risk Flag",
+  },
+};
+
+function SuggestionsPanel({
+  suggestions,
+  onClickSuggestion,
+}: {
+  suggestions: RagSuggestion[];
+  onClickSuggestion: (s: RagSuggestion) => void;
+}) {
+  if (suggestions.length === 0) return null;
+
+  return (
+    <div className="max-w-3xl mx-auto px-3 sm:px-4 pb-3">
+      <p className="text-[11px] text-gray-500 mb-2 flex items-center gap-1.5">
+        <Lightbulb size={11} />
+        Proactive suggestions
+      </p>
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        {suggestions.slice(0, 2).map((s) => {
+          const config = SUGGESTION_CONFIG[s.type] || SUGGESTION_CONFIG.adjacency;
+          const Icon = config.icon;
+          return (
+            <button
+              key={s.id}
+              onClick={() => onClickSuggestion(s)}
+              className={`group text-left px-3 py-2.5 rounded-lg border border-gray-800 border-l-2 ${config.border} bg-gray-900/50 hover:bg-gray-800 hover:border-gray-700 transition-colors`}
+            >
+              <div className="flex items-center gap-2 mb-1">
+                <Icon size={13} className={config.color} />
+                <span className={`text-[10px] font-semibold uppercase tracking-wider ${config.color}`}>
+                  {config.label}
+                </span>
+              </div>
+              <p className="text-xs text-gray-300 font-medium truncate">
+                {s.title}
+              </p>
+              <p className="text-[11px] text-gray-500 mt-0.5 line-clamp-2">
+                {s.reason}
+              </p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function Chat() {
-  const { activeSession, streaming, ragSources, sendMessage } = useChat();
+  const { activeSession, streaming, ragSources, ragSuggestions, sendMessage } =
+    useChat();
   const ragEnabled = useSettingsStore((s) => s.ragEnabled);
   const collection = useSettingsStore((s) => s.collection);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -33,6 +107,10 @@ export function Chat() {
   }, [activeSession]);
 
   const isEmpty = !activeSession || activeSession.messages.length === 0;
+
+  const handleSuggestionClick = (s: RagSuggestion) => {
+    sendMessage(`Tell me more about "${s.title}"`);
+  };
 
   return (
     <div className="flex flex-1 flex-col h-full">
@@ -87,6 +165,15 @@ export function Chat() {
                   previousMessage={i > 0 ? arr[i - 1] : undefined}
                 />
               ))}
+
+            {/* Proactive suggestion cards — after last assistant message */}
+            {!streaming && ragSuggestions.length > 0 && (
+              <SuggestionsPanel
+                suggestions={ragSuggestions}
+                onClickSuggestion={handleSuggestionClick}
+              />
+            )}
+
             <div ref={messagesEndRef} />
           </div>
         )}
@@ -100,7 +187,11 @@ export function Chat() {
               onClick={() => setSourcesOpen(!sourcesOpen)}
               className="flex items-center gap-1.5 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors w-full"
             >
-              {sourcesOpen ? <ChevronDown size={12} /> : <ChevronRight size={12} />}
+              {sourcesOpen ? (
+                <ChevronDown size={12} />
+              ) : (
+                <ChevronRight size={12} />
+              )}
               <Database size={12} />
               Retrieved sources ({ragSources.length})
             </button>
@@ -108,7 +199,8 @@ export function Chat() {
               <div className="flex gap-2 flex-wrap pb-2">
                 {ragSources.map((s, i) => {
                   const filename =
-                    (s.metadata?.filename as string) || `chunk #${s.chunk_index}`;
+                    (s.metadata?.filename as string) ||
+                    `chunk #${s.chunk_index}`;
                   const shortName =
                     filename.length > 30
                       ? filename.slice(0, 27) + "..."

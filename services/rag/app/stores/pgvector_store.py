@@ -175,7 +175,8 @@ class PgVectorStore(VectorStore):
             rows = await conn.fetch(
                 """
                 SELECT content, chunk_index, metadata,
-                       1 - (embedding <=> $1::vector) AS score
+                       1 - (embedding <=> $1::vector) AS score,
+                       created_at::text AS created_at
                 FROM documents
                 WHERE collection = $2
                 ORDER BY embedding <=> $1::vector
@@ -191,6 +192,7 @@ class PgVectorStore(VectorStore):
                 score=float(row["score"]),
                 metadata=json.loads(row["metadata"]),
                 chunk_index=row["chunk_index"],
+                created_at=row.get("created_at"),
             )
             for row in rows
         ]
@@ -252,7 +254,7 @@ class PgVectorStore(VectorStore):
             rows = await conn.fetch(
                 """
                 WITH vector_ranked AS (
-                    SELECT id, content, chunk_index, metadata,
+                    SELECT id, content, chunk_index, metadata, created_at,
                            ROW_NUMBER() OVER (
                                ORDER BY embedding <=> $1::vector
                            ) AS vec_rank
@@ -262,7 +264,7 @@ class PgVectorStore(VectorStore):
                     LIMIT $4
                 ),
                 keyword_ranked AS (
-                    SELECT id, content, chunk_index, metadata,
+                    SELECT id, content, chunk_index, metadata, created_at,
                            ROW_NUMBER() OVER (
                                ORDER BY ts_rank_cd(tsv, to_tsquery('simple', $3)) DESC
                            ) AS kw_rank
@@ -278,12 +280,13 @@ class PgVectorStore(VectorStore):
                         COALESCE(v.content, k.content) AS content,
                         COALESCE(v.chunk_index, k.chunk_index) AS chunk_index,
                         COALESCE(v.metadata, k.metadata) AS metadata,
+                        COALESCE(v.created_at, k.created_at)::text AS created_at,
                         COALESCE(1.0 / ($5 + v.vec_rank), 0) +
                         COALESCE($7 / ($5 + k.kw_rank), 0) AS score
                     FROM vector_ranked v
                     FULL OUTER JOIN keyword_ranked k ON v.id = k.id
                 )
-                SELECT content, chunk_index, metadata, score
+                SELECT content, chunk_index, metadata, score, created_at
                 FROM fused
                 ORDER BY score DESC
                 LIMIT $6
@@ -303,6 +306,7 @@ class PgVectorStore(VectorStore):
                 score=float(row["score"]),
                 metadata=json.loads(row["metadata"]),
                 chunk_index=row["chunk_index"],
+                created_at=row.get("created_at"),
             )
             for row in rows
         ]

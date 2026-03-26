@@ -24,9 +24,19 @@ export interface RagSource {
   chunk_index: number;
 }
 
+export interface RagSuggestion {
+  id: string;
+  type: "adjacency" | "recency" | "risk";
+  title: string;
+  reason: string;
+  snippet: string;
+  score: number;
+}
+
 export interface RagResult {
   context: string;
   sources: RagSource[];
+  suggestions: RagSuggestion[];
   question: string;
   collection: string;
 }

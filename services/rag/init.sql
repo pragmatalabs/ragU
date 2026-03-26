@@ -62,3 +62,17 @@ CREATE TABLE IF NOT EXISTS response_cache (
 
 CREATE UNIQUE INDEX IF NOT EXISTS idx_response_cache_hash ON response_cache (question_hash, collection);
 CREATE INDEX IF NOT EXISTS idx_response_cache_lookup ON response_cache (question_hash);
+
+-- Suggestion tracking
+CREATE TABLE IF NOT EXISTS suggestion_log (
+    id SERIAL PRIMARY KEY,
+    suggestion_id VARCHAR(64),
+    question TEXT,
+    suggestion_type VARCHAR(32),
+    suggestion_title VARCHAR(255),
+    impression BOOLEAN DEFAULT TRUE,
+    clicked BOOLEAN DEFAULT FALSE,
+    collection VARCHAR(255),
+    created_at TIMESTAMP DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_suggestion_log_created ON suggestion_log(created_at DESC);

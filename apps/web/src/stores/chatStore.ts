@@ -1,10 +1,11 @@
 import { create } from "zustand";
-import type { ChatSession, Message, RagSource } from "../lib/types";
+import type { ChatSession, Message, RagSource, RagSuggestion } from "../lib/types";
 
 interface ChatState {
   sessions: ChatSession[];
   activeSessionId: string | null;
   ragSources: RagSource[];
+  ragSuggestions: RagSuggestion[];
   streaming: boolean;
 
   createSession: () => string;
@@ -12,6 +13,7 @@ interface ChatState {
   addMessage: (sessionId: string, message: Message) => void;
   updateLastAssistantMessage: (sessionId: string, content: string) => void;
   setRagSources: (sources: RagSource[]) => void;
+  setRagSuggestions: (suggestions: RagSuggestion[]) => void;
   setStreaming: (streaming: boolean) => void;
   deleteSession: (id: string) => void;
 }
@@ -24,6 +26,7 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
   sessions: [],
   activeSessionId: null,
   ragSources: [],
+  ragSuggestions: [],
   streaming: false,
 
   createSession: () => {
@@ -38,11 +41,12 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
       sessions: [session, ...s.sessions],
       activeSessionId: id,
       ragSources: [],
+      ragSuggestions: [],
     }));
     return id;
   },
 
-  setActiveSession: (id) => set({ activeSessionId: id, ragSources: [] }),
+  setActiveSession: (id) => set({ activeSessionId: id, ragSources: [], ragSuggestions: [] }),
 
   addMessage: (sessionId, message) =>
     set((s) => ({
@@ -77,6 +81,7 @@ export const useChatStore = create<ChatState>()((set, _get) => ({
     })),
 
   setRagSources: (sources) => set({ ragSources: sources }),
+  setRagSuggestions: (suggestions) => set({ ragSuggestions: suggestions }),
   setStreaming: (streaming) => set({ streaming }),
 
   deleteSession: (id) =>

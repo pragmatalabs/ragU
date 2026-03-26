@@ -3,6 +3,7 @@ from fastapi import APIRouter
 
 from app.services.embedder import embed_query
 from app.services.vectorstore import get_store
+from app.services.suggestions import compute_suggestions
 
 router = APIRouter()
 
@@ -15,17 +16,31 @@ class QueryRequest(BaseModel):
 
 @router.post("")
 async def rag_query(req: QueryRequest):
-    """Retrieve relevant chunks for a question."""
+    """Retrieve relevant chunks for a question, with proactive suggestions."""
     embedding = await embed_query(req.question)
 
     store = get_store()
-    results = await store.search(
-        req.collection, embedding, top_k=req.top_k, query_text=req.question
+
+    # Over-fetch 3x candidates for the suggestion engine
+    fetch_k = req.top_k * 3
+    candidate_pool = await store.search(
+        req.collection, embedding, top_k=fetch_k, query_text=req.question
+    )
+
+    # Top results for the user
+    top_results = candidate_pool[: req.top_k]
+
+    # Compute proactive suggestions from the full pool
+    suggestions = compute_suggestions(
+        query_text=req.question,
+        top_results=top_results,
+        candidate_pool=candidate_pool,
+        top_k=req.top_k,
     )
 
     # Sort by filename + chunk_index so context reads in document order
     sorted_for_context = sorted(
-        results,
+        top_results,
         key=lambda r: (r.metadata.get("filename", ""), r.chunk_index),
     )
     context = "\n\n---\n\n".join(r.content for r in sorted_for_context)
@@ -36,12 +51,13 @@ async def rag_query(req: QueryRequest):
             "metadata": r.metadata,
             "chunk_index": r.chunk_index,
         }
-        for r in results
+        for r in top_results
     ]
 
     return {
         "context": context,
         "sources": sources,
+        "suggestions": suggestions,
         "question": req.question,
         "collection": req.collection,
     }

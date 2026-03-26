@@ -58,10 +58,12 @@ export function useChat() {
     activeSessionId,
     streaming,
     ragSources,
+    ragSuggestions,
     createSession,
     addMessage,
     updateLastAssistantMessage,
     setRagSources,
+    setRagSuggestions,
     setStreaming,
   } = useChatStore();
 
@@ -110,20 +112,35 @@ export function useChat() {
         systemParts.push(agentPrompt);
       }
 
-      // RAG context
+      // RAG context + proactive suggestions
       if (ragEnabled) {
         try {
           const result = await ragQuery(content, collection, topK);
           setRagSources(result.sources);
+          setRagSuggestions(result.suggestions ?? []);
 
           if (result.context) {
-            systemParts.push(
-              `## Reference Documents\n\n${result.context}\n\n---\nAnswer ONLY based on the documents above. Do not use outside knowledge. If the answer is not in the documents, say so.`
-            );
+            let ragPrompt = `## Reference Documents\n\n${result.context}\n\n---\nAnswer ONLY based on the documents above. Do not use outside knowledge. If the answer is not in the documents, say so.`;
+
+            // Append suggestion hints for the LLM
+            if (result.suggestions && result.suggestions.length > 0) {
+              const hints = result.suggestions
+                .map(
+                  (s) =>
+                    `- [${s.type}] "${s.title}" — ${s.reason}`
+                )
+                .join("\n");
+              ragPrompt += `\n\nPROACTIVE SUGGESTIONS (mention these after your answer, below a --- separator):\n${hints}`;
+            }
+
+            systemParts.push(ragPrompt);
           }
         } catch (err) {
           console.error("RAG query failed:", err);
+          setRagSuggestions([]);
         }
+      } else {
+        setRagSuggestions([]);
       }
 
       // Prepend combined system message
@@ -183,9 +200,10 @@ export function useChat() {
       addMessage,
       updateLastAssistantMessage,
       setRagSources,
+      setRagSuggestions,
       setStreaming,
     ]
   );
 
-  return { activeSession, streaming, ragSources, sendMessage };
+  return { activeSession, streaming, ragSources, ragSuggestions, sendMessage };
 }

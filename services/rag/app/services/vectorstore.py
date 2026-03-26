@@ -10,6 +10,7 @@ class SearchResult:
     score: float
     metadata: dict
     chunk_index: int
+    created_at: str | None = None
 
 
 class VectorStore(ABC):
