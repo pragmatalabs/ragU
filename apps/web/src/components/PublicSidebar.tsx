@@ -1,10 +1,14 @@
 import { useChatStore } from "../stores/chatStore";
 import { ModelSelector } from "./ModelSelector";
 import { SettingsPanel } from "./SettingsPanel";
-import { Plus, Trash2, MessageSquare, Lock } from "lucide-react";
+import { Plus, Trash2, MessageSquare, Lock, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
-export function PublicSidebar() {
+interface PublicSidebarProps {
+  onNavigate?: () => void;
+}
+
+export function PublicSidebar({ onNavigate }: PublicSidebarProps) {
   const { sessions, activeSessionId, createSession, setActiveSession, deleteSession } =
     useChatStore();
 
@@ -16,13 +20,26 @@ export function PublicSidebar() {
           <h1 className="text-lg font-bold tracking-tight">
             rag<span className="text-blue-400">U</span>
           </h1>
-          <button
-            onClick={createSession}
-            className="p-1.5 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
-            title="New chat"
-          >
-            <Plus size={16} />
-          </button>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => {
+                createSession();
+                onNavigate?.();
+              }}
+              className="p-1.5 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors"
+              title="New chat"
+            >
+              <Plus size={16} />
+            </button>
+            {/* Close button — mobile only */}
+            <button
+              onClick={onNavigate}
+              className="p-1.5 bg-gray-800 rounded-lg hover:bg-gray-700 transition-colors md:hidden"
+              title="Close sidebar"
+            >
+              <X size={16} />
+            </button>
+          </div>
         </div>
       </div>
 
@@ -31,7 +48,10 @@ export function PublicSidebar() {
         {sessions.map((s) => (
           <div
             key={s.id}
-            onClick={() => setActiveSession(s.id)}
+            onClick={() => {
+              setActiveSession(s.id);
+              onNavigate?.();
+            }}
             className={`group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer text-sm transition-colors ${
               s.id === activeSessionId
                 ? "bg-gray-800 text-white"
@@ -53,7 +73,7 @@ export function PublicSidebar() {
         ))}
       </div>
 
-      {/* Simplified Settings (no document upload) */}
+      {/* Settings */}
       <div className="border-t border-gray-800 p-4 space-y-4 overflow-y-auto max-h-[50vh]">
         <ModelSelector />
         <SettingsPanel />

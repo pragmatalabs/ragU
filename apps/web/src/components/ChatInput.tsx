@@ -173,7 +173,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
 
   return (
     <div
-      className="border-t border-gray-800 p-4"
+      className="border-t border-gray-800 p-2 sm:p-4"
       onDragOver={handleDragOver}
       onDrop={handleDrop}
     >
@@ -241,7 +241,7 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
               e.target.style.height = `${e.target.scrollHeight}px`;
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Send a message... (drag & drop files to upload)"
+            placeholder="Send a message..."
             rows={1}
             className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 resize-none focus:outline-none focus:border-blue-500 text-sm max-h-40"
             disabled={disabled}

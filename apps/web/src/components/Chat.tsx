@@ -57,7 +57,7 @@ export function Chat() {
                   <Lightbulb size={12} />
                   Puedes preguntar, por ejemplo:
                 </p>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                   {suggestions.map((q, i) => (
                     <button
                       key={i}

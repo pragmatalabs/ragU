@@ -100,7 +100,7 @@ function ActionBar({
   }, [answer]);
 
   return (
-    <div className="flex items-center gap-1 mt-2 opacity-0 group-hover/msg:opacity-100 transition-opacity">
+    <div className="flex items-center gap-1 mt-2 flex-wrap opacity-100 sm:opacity-0 sm:group-hover/msg:opacity-100 transition-opacity">
       <button
         onClick={handleCopy}
         className="flex items-center gap-1 px-2 py-1 rounded text-[11px] text-gray-500 hover:text-gray-300 hover:bg-gray-800 transition-colors"
@@ -165,7 +165,7 @@ export function ChatMessage({
   const question = previousMessage?.role === "user" ? previousMessage.content : "";
 
   return (
-    <div className={`flex gap-3 px-4 py-3 ${isUser ? "" : "bg-gray-900/50"}`}>
+    <div className={`flex gap-2 sm:gap-3 px-3 sm:px-4 py-3 ${isUser ? "" : "bg-gray-900/50"}`}>
       <div
         className={`flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center ${
           isUser ? "bg-blue-600" : "bg-emerald-600"
