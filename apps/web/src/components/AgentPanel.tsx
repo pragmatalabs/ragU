@@ -144,7 +144,12 @@ export function AgentPanel() {
     setSkills,
     setGuardrails,
     setTools,
+    spaces,
+    activeSpaceId,
+    updateSpace,
   } = useSettingsStore();
+
+  const activeSpace = spaces.find((s) => s.id === activeSpaceId);
 
   const configMap: Record<
     SubTab,
@@ -190,6 +195,21 @@ export function AgentPanel() {
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-3xl mx-auto p-6 space-y-6">
+        {/* Active space banner */}
+        {activeSpace && (
+          <div className="flex items-center justify-between bg-blue-950/30 border border-blue-900/50 rounded-lg px-4 py-2.5">
+            <span className="text-sm text-blue-300">
+              Editing agent for: <strong>{activeSpace.icon} {activeSpace.name}</strong>
+            </span>
+            <button
+              onClick={() => updateSpace(activeSpace.id)}
+              className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
+            >
+              Save to space
+            </button>
+          </div>
+        )}
+
         {/* Header */}
         <div>
           <h2 className="text-lg font-semibold text-white">

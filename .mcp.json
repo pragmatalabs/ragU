@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "ragU": {
+      "type": "stdio",
+      "command": "python3",
+      "args": [
+        "/Users/juliandelarosa/Projects/ragU/services/rag/mcp_server.py"
+      ],
+      "env": {
+        "PYTHONPATH": "/Users/juliandelarosa/Projects/ragU/services/rag",
+        "OLLAMA_HOST": "http://localhost:11435"
+      }
+    }
+  }
+}

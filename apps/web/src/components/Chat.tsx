@@ -91,6 +91,9 @@ export function Chat() {
     useChat();
   const ragEnabled = useSettingsStore((s) => s.ragEnabled);
   const collection = useSettingsStore((s) => s.collection);
+  const activeSpaceId = useSettingsStore((s) => s.activeSpaceId);
+  const spaces = useSettingsStore((s) => s.spaces);
+  const activeSpace = spaces.find((s) => s.id === activeSpaceId);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [suggestions, setSuggestions] = useState<string[]>([]);
   const [sourcesOpen, setSourcesOpen] = useState(false);
@@ -227,13 +230,16 @@ export function Chat() {
           {ragEnabled ? (
             <>
               <Database size={12} className="text-emerald-500" />
+              {activeSpace && (
+                <>
+                  <span className="text-blue-400">{activeSpace.icon} {activeSpace.name}</span>
+                  <span className="text-gray-600">·</span>
+                </>
+              )}
               <span className="text-emerald-500">RAG on</span>
               <span className="text-gray-600">·</span>
               <span className="text-gray-500">
-                collection:{" "}
-                <strong className="text-gray-400">
-                  {collection || "default"}
-                </strong>
+                {collection || "default"}
               </span>
             </>
           ) : (

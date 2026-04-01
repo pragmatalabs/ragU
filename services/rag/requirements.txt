@@ -9,6 +9,9 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 minio==7.2.15
 
+# MCP (Model Context Protocol) server
+mcp[cli]>=1.0.0
+
 # Document parsing
 pymupdf==1.25.3
 python-docx==1.1.2

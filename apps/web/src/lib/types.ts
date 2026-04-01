@@ -77,3 +77,16 @@ export interface AgentConfigItem {
   content: string;
   enabled: boolean;
 }
+
+export interface Space {
+  id: string;
+  name: string;
+  icon: string;
+  collection: string;
+  ragEnabled: boolean;
+  instructions: AgentConfigItem[];
+  skills: AgentConfigItem[];
+  guardrails: AgentConfigItem[];
+  tools: AgentConfigItem[];
+  topK: number;
+}

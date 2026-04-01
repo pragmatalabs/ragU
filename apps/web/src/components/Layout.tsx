@@ -3,6 +3,7 @@ import { Sidebar } from "./Sidebar";
 import { Chat } from "./Chat";
 import { DocumentsPanel } from "./DocumentsPanel";
 import { AgentPanel } from "./AgentPanel";
+import { SpaceSwitcher } from "./SpaceSwitcher";
 import { MessageSquare, FolderOpen, Bot, Info, X, Github, Mail, Linkedin } from "lucide-react";
 
 type Tab = "chat" | "documents" | "agent";
@@ -112,7 +113,10 @@ export function Layout() {
             })}
           </div>
 
-          {/* About button */}
+          {/* Space switcher + About */}
+          <div className="flex items-center gap-2">
+            <SpaceSwitcher />
+          </div>
           <button
             onClick={() => setShowAbout(true)}
             className="flex items-center gap-1.5 px-3 py-2 text-xs text-gray-500 hover:text-gray-300 transition-colors"

@@ -1,9 +1,10 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import type { AgentConfigItem } from "../lib/types";
+import type { AgentConfigItem, Space } from "../lib/types";
 
 interface SettingsState {
-  provider: string; // "ollama" | "groq"
+  // Active working state (flat fields — read by useChat, api, etc.)
+  provider: string;
   model: string;
   ragEnabled: boolean;
   collection: string;
@@ -17,6 +18,12 @@ interface SettingsState {
   skills: AgentConfigItem[];
   guardrails: AgentConfigItem[];
   tools: AgentConfigItem[];
+
+  // Spaces (save/load presets)
+  spaces: Space[];
+  activeSpaceId: string | null;
+
+  // Flat field setters
   setProvider: (provider: string) => void;
   setModel: (model: string) => void;
   setRagEnabled: (enabled: boolean) => void;
@@ -31,11 +38,17 @@ interface SettingsState {
   setSkills: (items: AgentConfigItem[]) => void;
   setGuardrails: (items: AgentConfigItem[]) => void;
   setTools: (items: AgentConfigItem[]) => void;
+
+  // Space actions
+  switchSpace: (id: string | null) => void;
+  saveCurrentAsSpace: (name: string, icon: string) => void;
+  updateSpace: (id: string) => void;
+  deleteSpace: (id: string) => void;
 }
 
 export const useSettingsStore = create<SettingsState>()(
   persist(
-    (set) => ({
+    (set, get) => ({
       provider: "groq",
       model: "groq/llama-3.3-70b-versatile",
       ragEnabled: true,
@@ -50,6 +63,9 @@ export const useSettingsStore = create<SettingsState>()(
       skills: [],
       guardrails: [],
       tools: [],
+      spaces: [],
+      activeSpaceId: null,
+
       setProvider: (provider) => set({ provider }),
       setModel: (model) => set({ model }),
       setRagEnabled: (ragEnabled) => set({ ragEnabled }),
@@ -64,6 +80,72 @@ export const useSettingsStore = create<SettingsState>()(
       setSkills: (skills) => set({ skills }),
       setGuardrails: (guardrails) => set({ guardrails }),
       setTools: (tools) => set({ tools }),
+
+      switchSpace: (id) => {
+        const { spaces } = get();
+        if (id === null) {
+          set({ activeSpaceId: null });
+          return;
+        }
+        const space = spaces.find((s) => s.id === id);
+        if (!space) return;
+        set({
+          activeSpaceId: id,
+          collection: space.collection,
+          ragEnabled: space.ragEnabled,
+          instructions: space.instructions,
+          skills: space.skills,
+          guardrails: space.guardrails,
+          tools: space.tools,
+          topK: space.topK,
+        });
+      },
+
+      saveCurrentAsSpace: (name, icon) => {
+        const s = get();
+        const id = Math.random().toString(36).substring(2, 10);
+        const newSpace: Space = {
+          id,
+          name,
+          icon,
+          collection: s.collection,
+          ragEnabled: s.ragEnabled,
+          instructions: s.instructions,
+          skills: s.skills,
+          guardrails: s.guardrails,
+          tools: s.tools,
+          topK: s.topK,
+        };
+        set({ spaces: [...s.spaces, newSpace], activeSpaceId: id });
+      },
+
+      updateSpace: (id) => {
+        const s = get();
+        set({
+          spaces: s.spaces.map((sp) =>
+            sp.id === id
+              ? {
+                  ...sp,
+                  collection: s.collection,
+                  ragEnabled: s.ragEnabled,
+                  instructions: s.instructions,
+                  skills: s.skills,
+                  guardrails: s.guardrails,
+                  tools: s.tools,
+                  topK: s.topK,
+                }
+              : sp
+          ),
+        });
+      },
+
+      deleteSpace: (id) => {
+        const s = get();
+        set({
+          spaces: s.spaces.filter((sp) => sp.id !== id),
+          activeSpaceId: s.activeSpaceId === id ? null : s.activeSpaceId,
+        });
+      },
     }),
     {
       name: "ragu-settings",
@@ -118,9 +200,19 @@ export const useSettingsStore = create<SettingsState>()(
           ];
         }
 
+        // v2→v3: Initialize spaces array
+        if (version < 3 && state) {
+          if (!Array.isArray(state.spaces)) {
+            state.spaces = [];
+          }
+          if (state.activeSpaceId === undefined) {
+            state.activeSpaceId = null;
+          }
+        }
+
         return state as unknown as SettingsState;
       },
-      version: 2,
+      version: 3,
     }
   )
 );
