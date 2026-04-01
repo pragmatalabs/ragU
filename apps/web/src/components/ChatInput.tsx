@@ -19,6 +19,7 @@ interface ChatInputProps {
 }
 
 const ACCEPTED_TYPES = ".txt,.md,.pdf,.csv,.json,.docx,.doc,.xls,.xlsx";
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const [input, setInput] = useState("");
@@ -39,6 +40,20 @@ export function ChatInput({ onSend, disabled }: ChatInputProps) {
   const processUpload = useCallback(
     async (file: File) => {
       const fileId = Math.random().toString(36).substring(2, 10);
+
+      if (file.size > MAX_FILE_SIZE) {
+        setAttachedFiles((prev) => [
+          ...prev,
+          {
+            id: fileId,
+            file,
+            status: "failed",
+            error: `Exceeds 10MB limit (${(file.size / 1024 / 1024).toFixed(1)}MB)`,
+          },
+        ]);
+        return;
+      }
+
       const attached: AttachedFile = { id: fileId, file, status: "uploading" };
       setAttachedFiles((prev) => [...prev, attached]);
 

@@ -80,12 +80,11 @@ cd ragU
 # 1. Environment
 cp .env.example .env
 
-# 2. Start infrastructure (PostgreSQL, MinIO, Qdrant, Redis)
+# 2. Start infrastructure (PostgreSQL, MinIO, Qdrant, Redis, Ollama)
 docker compose up -d
 
-# 3. Pull Ollama models (first time only)
-ollama pull llama3.2:3b
-ollama pull nomic-embed-text
+# 3. Pull embedding model into ragU's Ollama (first time only)
+docker exec ragu-ollama ollama pull nomic-embed-text
 
 # 4. Start RAG backend
 cd services/rag
@@ -110,7 +109,8 @@ Open **http://localhost:5179** --- upload a document, flip on RAG mode, and star
 | Frontend | React 19 + Vite 6 + Tailwind CSS | Chat UI, settings, file upload |
 | Gateway | Hono + Bun | API proxy and routing |
 | RAG Backend | FastAPI + Python 3.12 | Ingest, embed, search, retrieve |
-| LLM Runtime | Ollama (native macOS) | Chat generation + embeddings |
+| LLM Runtime | Ollama (Docker, self-contained) | Embeddings + optional local chat |
+| LLM Provider | Groq Cloud (default) | Fast chat generation for non-GPU environments |
 | Vector DB | PostgreSQL + pgvector | System of record, hybrid search, dedup |
 | Vector DB | Qdrant | High-performance ANN engine |
 | Object Storage | MinIO | S3-compatible document storage |
@@ -161,17 +161,17 @@ Re-uploading the same document won't bloat your index. SHA-256 content hashing w
 
 All ports offset by `+6` from defaults to avoid collisions with other local services:
 
-| Service | Port |
-|---------|------|
-| Frontend | `5179` |
-| Gateway | `3006` |
-| RAG API | `8006` |
-| Ollama | `11434` |
-| PostgreSQL | `5438` |
-| Qdrant | `6339` |
-| MinIO API | `9008` |
-| MinIO Console | `9009` |
-| Redis | `6379` |
+| Service | Port | Container |
+|---------|------|-----------|
+| Frontend | `5179` | - |
+| Gateway | `3006` | - |
+| RAG API | `8006` | - |
+| Ollama | `11435` | `ragu-ollama` |
+| PostgreSQL | `5438` | `ragu-postgres` |
+| Qdrant | `6339` | `ragu-qdrant` |
+| MinIO API | `9008` | `ragu-minio` |
+| MinIO Console | `9009` | `ragu-minio` |
+| Redis | `6379` | `ragu-redis` |
 
 ---
 
@@ -193,7 +193,7 @@ ragU/
 |       |-- requirements.txt
 |-- packages/
 |   |-- shared/               # Shared TypeScript types
-|-- docker-compose.yml        # PostgreSQL, MinIO, Qdrant, Redis
+|-- docker-compose.yml        # PostgreSQL, MinIO, Qdrant, Redis, Ollama
 |-- ARCHITECTURE.md           # Deep-dive system documentation
 |-- .env.example
 |-- package.json              # Bun workspace root
@@ -233,8 +233,10 @@ All settings via environment variables. See [`.env.example`](.env.example) for t
 | Variable | Default | What it does |
 |----------|---------|-------------|
 | `VECTOR_DB` | `pgvector` | Vector store mode: `pgvector`, `qdrant`, `hybrid` |
-| `OLLAMA_MODEL` | `llama3.2:3b` | Default chat model |
+| `OLLAMA_HOST` | `http://localhost:11435` | Ollama endpoint for embeddings |
+| `OLLAMA_MODEL` | `llama3.2:3b` | Default chat model (local fallback) |
 | `OLLAMA_EMBED_MODEL` | `nomic-embed-text` | Embedding model (768-dim) |
+| `GROQ_API_KEY` | - | Groq Cloud API key (default LLM provider) |
 | `CHUNK_SIZE` | `500` | Characters per chunk |
 | `CHUNK_OVERLAP` | `50` | Overlap between chunks |
 
@@ -278,6 +280,83 @@ ragU exists so anyone can:
 - **Prototype ideas** in a real full-stack environment, not just notebooks
 
 If you're learning about AI infrastructure, exploring local LLMs, or just curious about how RAG works under the hood --- this is your sandbox.
+
+---
+
+## Troubleshooting & Tips
+
+### File Upload Limit (10MB)
+
+All document uploads are capped at **10MB** across the entire stack:
+
+1. **Frontend** (`ChatInput.tsx`, `DocumentUpload.tsx`) -- rejects immediately with size error badge, no network request
+2. **Gateway** (`documents.ts`) -- returns HTTP `413` before forwarding to backend
+3. **RAG Backend** (`ingest.py`) -- final server-side guard, returns HTTP `413`
+
+If you need to change the limit, update `MAX_FILE_SIZE` in all three layers.
+
+### Ollama: Self-Contained vs Shared
+
+ragU ships its own Ollama container (`ragu-ollama` on port `11435`) to avoid conflicts with other projects. If you already have Ollama running locally or in another stack:
+
+```bash
+# Point ragU to an existing Ollama instance instead
+OLLAMA_HOST=http://localhost:11434   # native Ollama
+OLLAMA_HOST=http://localhost:11444   # another Docker Ollama
+```
+
+Make sure the target Ollama has `nomic-embed-text` pulled -- embeddings will fail silently without it.
+
+### Qdrant Health Check Fails
+
+The Qdrant Docker image doesn't include `curl` or `wget`. The health check uses bash TCP probing:
+
+```yaml
+healthcheck:
+  test: ["CMD-SHELL", "bash -c '</dev/tcp/localhost/6333' 2>/dev/null || exit 1"]
+```
+
+If you see `unhealthy` status, verify the port mapping matches (`6339:6333` by default).
+
+### Rollup Native Module Error (Apple Silicon + Rosetta Node)
+
+If you see `Cannot find module @rollup/rollup-darwin-x64` on an Apple Silicon Mac, your Node.js is the x86_64 build running under Rosetta, but pnpm only installs arm64 native modules.
+
+**Fix:** Add `@rollup/rollup-darwin-x64` to `optionalDependencies` in `apps/web/package.json` (already included), then manually extract the tarball:
+
+```bash
+ROLLUP_VER=$(node -e "console.log(require('./node_modules/.pnpm/rollup@*/node_modules/rollup/package.json').version)")
+curl -sL "https://registry.npmjs.org/@rollup/rollup-darwin-x64/-/rollup-darwin-x64-${ROLLUP_VER}.tgz" -o /tmp/rollup-x64.tgz
+mkdir -p apps/web/node_modules/@rollup/rollup-darwin-x64
+tar -xzf /tmp/rollup-x64.tgz -C apps/web/node_modules/@rollup/rollup-darwin-x64 --strip-components=1
+```
+
+Or install native arm64 Node.js to avoid Rosetta entirely.
+
+### Groq API Key Not Found in Dev
+
+The gateway runs via Bun, which doesn't auto-load the root `.env`. Export it before starting:
+
+```bash
+source .env && export GROQ_API_KEY && bun run dev:all
+```
+
+### Port Already in Use
+
+If `bun run dev:all` fails with `EADDRINUSE`, kill stale processes:
+
+```bash
+lsof -ti:3006 | xargs kill -9   # gateway
+lsof -ti:5179 | xargs kill -9   # vite
+lsof -ti:8006 | xargs kill -9   # RAG backend
+```
+
+### RAG Backend Crashes on Startup
+
+Common causes:
+- **`ModuleNotFoundError: No module named 'minio'`** -- run `pip install -r services/rag/requirements.txt`
+- **`ConnectionRefusedError` on startup** -- Docker containers aren't ready yet. Run `docker compose up -d` and wait for all services to be `healthy`
+- **Embeddings fail with `All connection attempts failed`** -- wrong `OLLAMA_HOST` in `.env`. Verify with `curl -s $OLLAMA_HOST/api/tags`
 
 ---
 

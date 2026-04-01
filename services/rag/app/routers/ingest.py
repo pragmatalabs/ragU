@@ -77,6 +77,14 @@ async def ingest_document(file: UploadFile, collection: str = "default"):
     content = await file.read()
     filename = file.filename or "unknown"
 
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+    if len(content) > MAX_FILE_SIZE:
+        size_mb = len(content) / 1024 / 1024
+        return JSONResponse(
+            status_code=413,
+            content={"error": f"File too large. Maximum size is 10MB (got {size_mb:.1f}MB)"},
+        )
+
     # Store in MinIO under collection prefix (sync → thread)
     key = f"{collection}/{uuid.uuid4().hex}_{filename}"
     await asyncio.to_thread(

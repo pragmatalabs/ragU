@@ -30,6 +30,7 @@ type UploadJob = {
 };
 
 const MAX_POLLS = 200; // Stop polling after ~5 minutes (200 * 1.5s)
+const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 
 export function DocumentUpload() {
   const { collection, setCollection } = useSettingsStore();
@@ -174,6 +175,22 @@ export function DocumentUpload() {
   const handleUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (file.size > MAX_FILE_SIZE) {
+      setJobs((prev) => [
+        {
+          jobId: `size-error-${Date.now()}`,
+          filename: file.name,
+          status: "failed",
+          chunks: 0,
+          error: `Exceeds 10MB limit (${(file.size / 1024 / 1024).toFixed(1)}MB)`,
+          pollCount: MAX_POLLS,
+        },
+        ...prev,
+      ]);
+      if (fileRef.current) fileRef.current.value = "";
+      return;
+    }
 
     setUploading(true);
     try {

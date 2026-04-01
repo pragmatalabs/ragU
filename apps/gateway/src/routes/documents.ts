@@ -14,6 +14,14 @@ documentsRoutes.post("/upload", async (c) => {
       return c.json({ error: "No file provided" }, 400);
     }
 
+    const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+    if (file.size > MAX_FILE_SIZE) {
+      return c.json(
+        { error: `File too large. Maximum size is 10MB (got ${(file.size / 1024 / 1024).toFixed(1)}MB)` },
+        413
+      );
+    }
+
     const bytes = await file.arrayBuffer();
     const blob = new Blob([bytes], { type: file.type || "application/octet-stream" });
 
